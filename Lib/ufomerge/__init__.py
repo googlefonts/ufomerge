@@ -86,23 +86,42 @@ class UFOMerger:
             logger.info("No glyphs selected, nothing to do")
             return
 
+        if self.layout_handling == "closure":
+            # There is a hard sequencing problem here. Glyphs which
+            # get substituted later in the file but earlier in the
+            # shaping process may get missed. ie.
+            #    lookup foo { sub B by C; } foo;
+            #    feature bar1 {
+            #       sub A by B;
+            #    } bar1;
+            #    feature bar2 { sub B' lookup foo; } bar2;
+            # If A is in the glyphset, B will get included when
+            # processing bar1 but by this time it's too late to see
+            # that this impacts upon C. I'm just going to keep running
+            # until the output is stable
+            count = len(self.final_glyphset)
+            rounds = 0
+            while True:
+                self.perform_layout_closure(self.ufo2_features.statements)
+                rounds += 1
+                if len(self.final_glyphset) == count:
+                    break
+                if rounds > 10:
+                    raise ValueError(
+                        "Layout closure failure; glyphset grew unreasonably"
+                    )
+                count = len(self.final_glyphset)
+
+        if self.layout_handling != "ignore":
+            self.ufo2_features.statements = self.filter_layout(
+                self.ufo2_features.statements
+            )
+            self.ufo1.features.text += self.ufo2_features.asFea()
+            self.add_language_systems()
+
         # list() avoids "Set changed size during iteration" error
         for glyph in list(self.incoming_glyphset.keys()):
             self.close_components(glyph)
-
-        if self.layout_handling == "closure":
-            self.perform_layout_closure(self.ufo2_features.statements)
-            self.ufo2_features.statements = self.filter_layout(
-                self.ufo2_features.statements
-            )
-            self.ufo1.features.text += self.ufo2_features.asFea()
-            self.add_language_systems()
-        elif self.layout_handling != "ignore":
-            self.ufo2_features.statements = self.filter_layout(
-                self.ufo2_features.statements
-            )
-            self.ufo1.features.text += self.ufo2_features.asFea()
-            self.add_language_systems()
 
         self.merge_kerning()
 
@@ -136,6 +155,7 @@ class UFOMerger:
             if base_glyph not in self.final_glyphset:
                 # Well, this is the easy case
                 self.final_glyphset.add(base_glyph)
+                logger.debug("Adding %s used as a component in %s", base_glyph, glyph)
                 self.incoming_glyphset[base_glyph] = True
                 self.close_components(base_glyph)
             elif self.existing_handling == "replace":
@@ -176,6 +196,11 @@ class UFOMerger:
                 for glyph in st.replacement.glyphSet():
                     self.incoming_glyphset[glyph] = True
                     self.final_glyphset.add(glyph)
+                    logger.debug(
+                        "Adding %s used in alternate substitution from %s",
+                        glyph,
+                        st.glyph.asFea(),
+                    )
             if isinstance(st, ast.MultipleSubstStatement):
                 # Fixup FontTools API breakage
                 if isinstance(st.glyph, str):
@@ -188,6 +213,11 @@ class UFOMerger:
                     for glyph in slot.glyphSet():
                         self.incoming_glyphset[glyph] = True
                         self.final_glyphset.add(glyph)
+                        logger.debug(
+                            "Adding %s used in multiple substitution from %s",
+                            glyph,
+                            st.glyph.asFea(),
+                        )
             if isinstance(st, ast.LigatureSubstStatement):
                 if has_any_empty_slots(self.filter_sequence(st.glyphs)):
                     continue
@@ -196,6 +226,11 @@ class UFOMerger:
                 for glyph in st.replacement.glyphSet():
                     self.incoming_glyphset[glyph] = True
                     self.final_glyphset.add(glyph)
+                    logger.debug(
+                        "Adding %s used in ligature substitution from %s",
+                        glyph,
+                        " ".join([x.asFea() for x in st.glyphs]),
+                    )
             if isinstance(st, ast.SingleSubstStatement):
                 originals = st.glyphs[0].glyphSet()
                 replaces = st.replacements[0].glyphSet()
@@ -205,6 +240,11 @@ class UFOMerger:
                     if inglyph in self.final_glyphset:
                         self.incoming_glyphset[outglyph] = True
                         self.final_glyphset.add(outglyph)
+                        logger.debug(
+                            "Adding %s used in single substitution from %s",
+                            outglyph,
+                            inglyph,
+                        )
 
     def filter_layout(self, statements):
         newstatements = []
@@ -215,6 +255,11 @@ class UFOMerger:
 
             if hasattr(st, "statements"):
                 st.statements = self.filter_layout(st.statements)
+                substantive_statements = [
+                    x for x in st.statements if not isinstance(x, ast.Comment)
+                ]
+                if not substantive_statements:
+                    st.statements = [ast.Comment("lookupflag 0; #HELLO WORLD")]
                 newstatements.append(st)
                 continue
             if isinstance(st, ast.GlyphClassDefinition):
@@ -341,6 +386,8 @@ class UFOMerger:
             if isinstance(st, ast.SingleSubstStatement):
                 st.prefix = self.filter_sequence(st.prefix)
                 st.suffix = self.filter_sequence(st.suffix)
+                if has_any_empty_slots(st.prefix) or has_any_empty_slots(st.suffix):
+                    continue
                 originals = st.glyphs[0].glyphSet()
                 replaces = st.replacements[0].glyphSet()
                 if len(replaces) == 1:
@@ -361,7 +408,6 @@ class UFOMerger:
                     st.glyphs = [ast.GlyphClass(list(newmapping.keys()))]
                     st.replacements = [ast.GlyphClass(list(newmapping.values()))]
             if isinstance(st, ast.SinglePosStatement):
-                print("Filtering ", st.asFea())
                 st.prefix = self.filter_sequence(st.prefix)
                 st.suffix = self.filter_sequence(st.suffix)
                 container, vr = st.pos[0]
@@ -473,6 +519,14 @@ class UFOMerger:
         if isinstance(container, ast.GlyphClass):
             container.glyphs = self.filter_glyphs(container.glyphs)
             return container
+        if isinstance(container, ast.GlyphClassName):
+            # Filter the class, see if there's anything left
+            classdef = container.glyphclass.glyphs
+            classdef.glyphs = self.filter_glyphs(classdef.glyphs)
+            if classdef.glyphs:
+                return container
+            return ast.GlyphClass([])
+        raise ValueError(f"Unknown glyph container {container}")
 
     # Routines for merging font lib keys
     def merge_set(self, name, glyph, create_if_not_in_ufo1=False):
