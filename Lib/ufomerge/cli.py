@@ -72,7 +72,7 @@ parser.add_argument("ufo1", help="UFO font file to merge into")
 parser.add_argument("ufo2", help="UFO font file to merge")
 parser.add_argument("--output", "-o", help="Output UFO font file")
 
-def main(args):
+def main(args=None):
     args = parser.parse_args(args)
     if args.replace_existing:
         existing_handling = "replace"
