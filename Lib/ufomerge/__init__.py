@@ -3,39 +3,27 @@ from io import StringIO
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Set, Tuple, Union
+from typing import Iterable, OrderedDict, Set, Tuple
 
-from fontFeatures import (
-    Attachment,
-    Chaining,
-    FontFeatures,
-    Positioning,
-    Routine,
-    RoutineReference,
-    Substitution,
-)
-from fontFeatures.feaLib import FeaParser
 from fontTools.feaLib.parser import Parser
-from fontTools.feaLib.ast import LanguageSystemStatement
+import fontTools.feaLib.ast as ast
 from ufoLib2 import Font
 
 logger = logging.getLogger("ufomerge")
 logging.basicConfig(level=logging.INFO)
 
 
-class LanguageSystemRecordingFeaParser(FeaParser):
-    def __init__(self, featurefile, font=None, glyphNames=None, includeDir=None):
-        super(LanguageSystemRecordingFeaParser, self).__init__(
-            featurefile, font=font, glyphNames=glyphNames, includeDir=includeDir
-        )
-        self.languagesystems = []
-
-    def add_language_system(self, location, script, language):
-        self.languagesystems.append((script, language))
-
-
-def has_any_empty_slots(sequence: list[list[str]]) -> bool:
-    return any(len(slot) == 0 for slot in sequence)
+def has_any_empty_slots(sequence: list) -> bool:
+    for slot in sequence:
+        if isinstance(slot, list):
+            if len(slot) == 0:
+                return True
+        elif hasattr(slot, "glyphSet"):
+            if len(slot.glyphSet()) == 0:
+                return True
+        else:
+            raise ValueError
+    return False
 
 
 @dataclass
@@ -50,7 +38,7 @@ class UFOMerger:
     # We would like to use a set here, but we need order preservation
     incoming_glyphset: dict[str, bool] = field(init=False)
     final_glyphset: Set[str] = field(init=False)
-    ufo2_features: FontFeatures = field(init=False)
+    ufo2_features: ast.FeatureFile = field(init=False)
     ufo2_languagesystems: list[Tuple[str, str]] = field(init=False)
 
     def __post_init__(self):
@@ -84,16 +72,14 @@ class UFOMerger:
         if self.layout_handling != "ignore":
             ufo2path = getattr(self.ufo2, "_path", None)
             includeDir = Path(ufo2path).parent if ufo2path else None
-            parser = LanguageSystemRecordingFeaParser(
-                self.ufo2.features.text,
+            self.ufo2_features = Parser(
+                StringIO(self.ufo2.features.text),
                 includeDir=includeDir,
                 glyphNames=list(self.ufo2.keys()),
-            )
-            self.ufo2_features = parser.parse()
-            self.ufo2_languagesystems = parser.languagesystems
+            ).parse()
         else:
-            self.ufo2_features = FontFeatures()
-            self.ufo2_languagesystems = []
+            self.ufo2_features = ast.FeatureFile()
+        self.ufo2_languagesystems = []
 
     def merge(self):
         if not self.incoming_glyphset:
@@ -105,10 +91,18 @@ class UFOMerger:
             self.close_components(glyph)
 
         if self.layout_handling == "closure":
-            self.perform_layout_closure()
-            self.merge_layout()
+            self.perform_layout_closure(self.ufo2_features.statements)
+            self.ufo2_features.statements = self.filter_layout(
+                self.ufo2_features.statements
+            )
+            self.ufo1.features.text += self.ufo2_features.asFea()
+            self.add_language_systems()
         elif self.layout_handling != "ignore":
-            self.merge_layout()
+            self.ufo2_features.statements = self.filter_layout(
+                self.ufo2_features.statements
+            )
+            self.ufo1.features.text += self.ufo2_features.asFea()
+            self.add_language_systems()
 
         self.merge_kerning()
 
@@ -154,26 +148,230 @@ class UFOMerger:
                     f"New glyph {glyph} used component {base_glyph} which already exists in font; not replacing it, as you have not specified --replace-existing"
                 )
 
-    def perform_layout_closure(self):
+    def perform_layout_closure(self, statements):
         """Make sure that anything that can be produced by
         substitution rules added to the new UFO will also be
         added to the glyphset."""
-        for routine in self.ufo2_features.routines:
-            for rule in routine.rules:
-                if not isinstance(rule, Substitution):
+        for st in statements:
+            if hasattr(st, "statements"):
+                self.perform_layout_closure(st.statements)
+            if not isinstance(
+                st,
+                (
+                    ast.SingleSubstStatement,
+                    ast.MultipleSubstStatement,
+                    ast.AlternateSubstStatement,
+                    ast.LigatureSubstStatement,
+                    ast.ChainContextSubstStatement,
+                ),
+            ):
+                continue
+            if has_any_empty_slots(
+                self.filter_sequence(st.prefix)
+            ) or has_any_empty_slots(self.filter_sequence(st.suffix)):
+                continue
+            if isinstance(st, ast.AlternateSubstStatement):
+                if not self.filter_glyphs(st.glyph.glyphSet()):
                     continue
-                if (
-                    has_any_empty_slots(self.filter_sequence(rule.input))
-                    or has_any_empty_slots(self.filter_sequence(rule.precontext))
-                    or has_any_empty_slots(self.filter_sequence(rule.postcontext))
-                ):
+                for glyph in st.replacement.glyphSet():
+                    self.incoming_glyphset[glyph] = True
+                    self.final_glyphset.add(glyph)
+            if isinstance(st, ast.MultipleSubstStatement):
+                # Fixup FontTools API breakage
+                if isinstance(st.glyph, str):
+                    st.glyph = ast.GlyphName(st.glyph, st.location)
+                if not self.filter_glyphs(st.glyph.glyphSet()):
                     continue
-                for sublist in rule.replacement:
-                    for glyph in sublist:
+                for slot in st.replacement:
+                    if isinstance(slot, str):
+                        slot = ast.GlyphName(slot, st.location)
+                    for glyph in slot.glyphSet():
                         self.incoming_glyphset[glyph] = True
                         self.final_glyphset.add(glyph)
+            if isinstance(st, ast.LigatureSubstStatement):
+                if has_any_empty_slots(self.filter_sequence(st.glyphs)):
+                    continue
+                if isinstance(st.replacement, str):
+                    st.replacement = ast.GlyphName(st.replacement, st.location)
+                for glyph in st.replacement.glyphSet():
+                    self.incoming_glyphset[glyph] = True
+                    self.final_glyphset.add(glyph)
+            if isinstance(st, ast.SingleSubstStatement):
+                originals = st.glyphs[0].glyphSet()
+                replaces = st.replacements[0].glyphSet()
+                if len(replaces) == 1:
+                    replaces = replaces * len(originals)
+                for inglyph, outglyph in zip(originals, replaces):
+                    if inglyph in self.final_glyphset:
+                        self.incoming_glyphset[outglyph] = True
+                        self.final_glyphset.add(outglyph)
 
-    # No typing here because it doesn't trust me.
+    def filter_layout(self, statements):
+        newstatements = []
+        for st in statements:
+            if isinstance(st, ast.LanguageSystemStatement):
+                self.ufo2_languagesystems.append((st.script, st.language))
+                continue
+
+            if hasattr(st, "statements"):
+                st.statements = self.filter_layout(st.statements)
+                newstatements.append(st)
+                continue
+            if isinstance(st, ast.GlyphClassDefinition):
+                st.glyphs = self.filter_glyph_container(st.glyphs)
+            if isinstance(
+                st,
+                (
+                    ast.MarkClassDefinition,
+                    ast.LigatureCaretByIndexStatement,
+                    ast.LigatureCaretByPosStatement,
+                ),
+            ):
+                st.glyphs = self.filter_glyph_container(st.glyphs)
+                if not st.glyphs.glyphSet():
+                    continue
+            if isinstance(st, ast.AlternateSubstStatement):
+                st.glyph = self.filter_glyph_container(st.glyph)
+                st.replacement = self.filter_glyph_container(st.replacement)
+                st.prefix = self.filter_sequence(st.prefix)
+                st.suffix = self.filter_sequence(st.suffix)
+                if (
+                    has_any_empty_slots(st.prefix)
+                    or has_any_empty_slots(st.suffix)
+                    or not st.replacement.glyphSet()
+                    or not st.glyph.glyphSet()
+                ):
+                    continue
+            if isinstance(
+                st, (ast.ChainContextSubstStatement, ast.ChainContextPosStatement)
+            ):
+                st.prefix = self.filter_sequence(st.prefix)
+                st.suffix = self.filter_sequence(st.suffix)
+                st.glyphs = self.filter_sequence(st.glyphs)
+                if (
+                    has_any_empty_slots(st.prefix)
+                    or has_any_empty_slots(st.suffix)
+                    or has_any_empty_slots(st.glyphs)
+                ):
+                    continue
+            if isinstance(st, (ast.CursivePosStatement)):
+                st.glyphclass = self.filter_glyph_container(st.glyphclass)
+                if not st.glyphclass.glyphSet():
+                    continue
+            if isinstance(st, (ast.IgnorePosStatement, ast.IgnoreSubstStatement)):
+                newcontexts = []
+                for prefix, glyphs, suffix in st.chainContexts:
+                    prefix[:] = self.filter_sequence(prefix)
+                    glyphs[:] = self.filter_sequence(glyphs)
+                    suffix[:] = self.filter_sequence(suffix)
+                    if (
+                        has_any_empty_slots(prefix)
+                        or has_any_empty_slots(suffix)
+                        or has_any_empty_slots(glyphs)
+                    ):
+                        continue
+                    newcontexts.append((prefix, glyphs, suffix))
+                if not newcontexts:
+                    continue
+                st.chainContexts = newcontexts
+            if isinstance(st, ast.LigatureSubstStatement):
+                st.glyphs = self.filter_sequence(st.glyphs)
+                st.replacement = self.filter_glyph_container(st.replacement)
+                st.prefix = self.filter_sequence(st.prefix)
+                st.suffix = self.filter_sequence(st.suffix)
+                if (
+                    has_any_empty_slots(st.prefix)
+                    or has_any_empty_slots(st.glyphs)
+                    or has_any_empty_slots(st.suffix)
+                    or not st.replacement.glyphSet()
+                ):
+                    continue
+            if isinstance(st, ast.LookupFlagStatement):
+                if st.markAttachment:
+                    st.markAttachment = self.filter_glyph_container(st.markAttachment)
+                    if not st.markAttachment.glyphSet():
+                        continue
+                if st.markFilteringSet:
+                    st.markFilteringSet = self.filter_glyph_container(
+                        st.markFilteringSet
+                    )
+                    if not st.markFilteringSet.glyphSet():
+                        continue
+            if isinstance(st, ast.MarkBasePosStatement):
+                st.base = self.filter_glyph_container(st.base)
+                if not st.base.glyphSet():
+                    continue
+            if isinstance(st, ast.MarkLigPosStatement):
+                st.ligatures = self.filter_glyph_container(st.ligatures)
+                if not st.ligatures.glyphSet():
+                    continue
+            if isinstance(st, ast.MarkMarkPosStatement):
+                st.baseMarks = self.filter_glyph_container(st.baseMarks)
+                if not st.baseMarks.glyphSet():
+                    continue
+            if isinstance(st, ast.MultipleSubstStatement):
+                st.glyph = self.filter_glyph_container(st.glyph)
+                st.replacement = self.filter_sequence(st.replacement)
+                st.prefix = self.filter_sequence(st.prefix)
+                st.suffix = self.filter_sequence(st.suffix)
+                if (
+                    has_any_empty_slots(st.prefix)
+                    or has_any_empty_slots(st.replacement)
+                    or has_any_empty_slots(st.suffix)
+                    or not st.glyph.glyphSet()
+                ):
+                    continue
+            if isinstance(st, ast.PairPosStatement):
+                st.glyphs1 = self.filter_glyph_container(st.glyphs1)
+                st.glyphs2 = self.filter_glyph_container(st.glyphs2)
+                if not st.glyphs1.glyphSet() or not st.glyphs2.glyphSet():
+                    continue
+            if isinstance(st, ast.ReverseChainSingleSubstStatement):
+                st.old_prefix = self.filter_sequence(st.old_prefix)
+                st.old_suffix = self.filter_sequence(st.old_suffix)
+                st.glyphs = self.filter_sequence(st.glyphs)
+                st.replacements = self.filter_sequence(st.replacements)
+                if (
+                    has_any_empty_slots(st.old_prefix)
+                    or has_any_empty_slots(st.replacements)
+                    or has_any_empty_slots(st.old_suffix)
+                    or has_any_empty_slots(st.glyphs)
+                ):
+                    continue
+            if isinstance(st, ast.SingleSubstStatement):
+                st.prefix = self.filter_sequence(st.prefix)
+                st.suffix = self.filter_sequence(st.suffix)
+                originals = st.glyphs[0].glyphSet()
+                replaces = st.replacements[0].glyphSet()
+                if len(replaces) == 1:
+                    replaces = replaces * len(originals)
+                newmapping = OrderedDict()
+                for inglyph, outglyph in zip(originals, replaces):
+                    if (
+                        inglyph in self.final_glyphset
+                        and outglyph in self.final_glyphset
+                    ):
+                        newmapping[inglyph] = outglyph
+                if not newmapping:
+                    continue
+                if len(newmapping) == 1:
+                    st.glyphs = [ast.GlyphName(list(newmapping.keys())[0])]
+                    st.replacements = [ast.GlyphName(list(newmapping.values())[0])]
+                else:
+                    st.glyphs = [ast.GlyphClass(list(newmapping.keys()))]
+                    st.replacements = [ast.GlyphClass(list(newmapping.values()))]
+            if isinstance(st, ast.SinglePosStatement):
+                print("Filtering ", st.asFea())
+                st.prefix = self.filter_sequence(st.prefix)
+                st.suffix = self.filter_sequence(st.suffix)
+                container, vr = st.pos[0]
+                st.pos = [(self.filter_glyph_container(container), vr)]
+                if not st.pos[0][0].glyphSet():
+                    continue
+
+            newstatements.append(st)
+        return newstatements
+
     def fix_context_and_check_applicable(self, rule) -> bool:
         # Slim context and inputs to only those glyphs we have
 
@@ -198,87 +396,31 @@ class UFOMerger:
 
         return True
 
-    def visit_substitution(self, rule: Substitution, newroutine: Routine):
-        # Filter inputs
-        result = self.fix_context_and_check_applicable(rule)
-        if not result:
-            return
-        # Filter outputs
-        if len(rule.input) == 1 and len(rule.replacement) == 1:  # GSUB1
-            mapping = zip(rule.input[0], rule.replacement[0])
-            mapping = [
-                (a, b)
-                for a, b in mapping
-                if a in self.final_glyphset and b in self.final_glyphset
-            ]
-            rule.input[0] = [r[0] for r in mapping]
-            rule.replacement[0] = [r[1] for r in mapping]
-        else:
-            rule.replacement = self.filter_sequence(rule.replacement)
-        if has_any_empty_slots(rule.replacement):
-            return
-        newroutine.rules.append(rule)
-        logging.debug("Adding rule '%s'", rule.asFea())
-
-    def visit_pos_chain(self, rule: Union[Positioning, Chaining], newroutine: Routine):
-        # Filter inputs
-        result = self.fix_context_and_check_applicable(rule)
-        if not result:
-            return
-        newroutine.rules.append(rule)
-        logging.debug("Adding rule '%s'", rule.asFea())
-
-    def merge_layout(self):
-        new_layout_rules = FontFeatures()
-        for routine in self.ufo2_features.routines:
-            newroutine = Routine(name=routine.name, flags=routine.flags)
-            setattr(routine, "counterpart", newroutine)
-            for rule in routine.rules:
-                if isinstance(rule, Substitution):
-                    self.visit_substitution(rule, newroutine)
-                elif isinstance(rule, (Positioning, Chaining)):
-                    self.visit_pos_chain(rule, newroutine)
-            if not newroutine.rules:
-                continue
-            new_layout_rules.routines.append(newroutine)
-            # Was it in a feature?
-            add_to = []
-            for feature_name, routines in self.ufo2_features.features.items():
-                for routine_ref in routines:
-                    if routine_ref.routine == routine:
-                        add_to.append(feature_name)
-            for feature_name in add_to:
-                new_layout_rules.addFeature(feature_name, [newroutine])
-        if not new_layout_rules.routines:
-            return
-        self.ufo1.features.text += new_layout_rules.asFea(do_gdef=False)
-        self.add_language_systems()
-
     def add_language_systems(self):
         if not self.ufo2_languagesystems:
             return
-        ast = Parser(
+        featurefile = Parser(
             StringIO(self.ufo1.features.text), glyphNames=list(self.final_glyphset)
         ).parse()
         current = []
         last = None
-        for lss in ast.statements:
-            if isinstance(lss, LanguageSystemStatement):
+        for lss in featurefile.statements:
+            if isinstance(lss, ast.LanguageSystemStatement):
                 current.append((lss.script, lss.language))
                 last = lss
         # If all new LSS are included in current, we're done.
         to_add = []
         for pair in self.ufo2_languagesystems:
             if pair not in current:
-                to_add.append(LanguageSystemStatement(*pair))
+                to_add.append(ast.LanguageSystemStatement(*pair))
         if not to_add:
             return
         if last is None:
             last_index = 0
         else:
-            last_index = ast.statements.index(last)
-        ast.statements[last_index + 1 : last_index + 1] = to_add
-        self.ufo1.features.text = ast.asFea()
+            last_index = featurefile.statements.index(last)
+        featurefile.statements[last_index + 1 : last_index + 1] = to_add
+        self.ufo1.features.text = featurefile.asFea()
 
     def merge_kerning(self):
         groups1 = self.ufo1.groups
@@ -310,8 +452,27 @@ class UFOMerger:
     def filter_glyphs(self, glyphs: Iterable[str]) -> list[str]:
         return [glyph for glyph in glyphs if glyph in self.final_glyphset]
 
-    def filter_sequence(self, slots: Iterable[list[str]]) -> list[list[str]]:
-        return [self.filter_glyphs(slot) for slot in slots]
+    def filter_sequence(self, slots: Iterable) -> list[list[str]]:
+        newslots = []
+        for slot in slots:
+            if isinstance(slot, list):
+                newslots.append(self.filter_glyphs(slot))
+            else:
+                newslots.append(self.filter_glyph_container(slot))
+        return newslots
+
+    def filter_glyph_container(self, container):
+        if isinstance(container, str):
+            # Grr.
+            container = ast.GlyphName(container)
+        if isinstance(container, ast.GlyphName):
+            # Single glyph
+            if container.glyph not in self.final_glyphset:
+                return ast.GlyphClass([])
+            return container
+        if isinstance(container, ast.GlyphClass):
+            container.glyphs = self.filter_glyphs(container.glyphs)
+            return container
 
     # Routines for merging font lib keys
     def merge_set(self, name, glyph, create_if_not_in_ufo1=False):
