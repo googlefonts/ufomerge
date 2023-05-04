@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ufomerge"
+description = "Merge together two source fonts in UFO format"
+readme = "README.md"
+dynamic = ["version"]
+authors = [
+  { name = "Simon Cozens", email = "simon@simon-cozens.org" }
+]
+classifiers = [
+  'Environment :: Console',
+  'Topic :: Text Processing :: Fonts',
+]
+dependencies = [
+  'setuptools',
+  'fontFeatures',
+  'ufoLib2',
+]
+
+[project.scripts]
+ufomerge = "ufomerge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["Lib"]
+
+[tool.setuptools_scm]
+write_to = "Lib/ufomerge/_version.py"
