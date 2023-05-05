@@ -15,7 +15,6 @@ classifiers = [
   'Topic :: Text Processing :: Fonts',
 ]
 dependencies = [
-  'setuptools',
   'fontTools',
   'ufoLib2',
 ]
