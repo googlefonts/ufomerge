@@ -259,7 +259,9 @@ class UFOMerger:
                     x for x in st.statements if not isinstance(x, ast.Comment)
                 ]
                 if not substantive_statements:
-                    st.statements = [ast.Comment("lookupflag 0; #HELLO WORLD")]
+                    if isinstance(st, ast.FeatureBlock):
+                        continue
+                    st.statements = [ast.Comment("lookupflag 0;")]
                 newstatements.append(st)
                 continue
             if isinstance(st, ast.GlyphClassDefinition):
