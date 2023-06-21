@@ -423,20 +423,31 @@ class UFOMerger:
         return newstatements
 
     def clean_layout(self, layout: ast.FeatureFile):
-        # Collect all referenced features
+        # Collect all referenced lookups
         referenced = set()
         for feature in layout.statements:
-            if not isinstance(feature, ast.FeatureBlock):
+            if not isinstance(feature, (ast.FeatureBlock, ast.LookupBlock)):
                 continue
-            for lookupref in feature.statements:
-                if not isinstance(lookupref, ast.LookupReferenceStatement):
-                    continue
-                referenced.add(lookupref.lookup.name)
+            for statement in feature.statements:
+                if isinstance(statement, ast.LookupReferenceStatement):
+                    referenced.add(statement.lookup.name)
+                if hasattr(statement, "lookups"):
+                    for lookuplist in statement.lookups:
+                        if lookuplist is None:
+                            continue
+                        if isinstance(lookuplist, (list, tuple)):
+                            for lookup in lookuplist:
+                                referenced.add(lookup.name)
+                        else:
+                            referenced.add(lookuplist.name)
 
         newfeatures = []
         # If there are any lookups within a feature but with no effective
         # statements, remove them.
         for feature in layout.statements:
+            # Remove any unreferenced lookups
+            if isinstance(feature, ast.LookupBlock) and feature.name not in referenced:
+                continue
             if not isinstance(feature, ast.FeatureBlock):
                 newfeatures.append(feature)
                 continue
