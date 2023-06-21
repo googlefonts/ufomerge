@@ -116,6 +116,7 @@ class UFOMerger:
             self.ufo2_features.statements = self.filter_layout(
                 self.ufo2_features.statements
             )
+            self.clean_layout(self.ufo2_features)
             self.ufo1.features.text += self.ufo2_features.asFea()
             self.add_language_systems()
 
@@ -418,7 +419,56 @@ class UFOMerger:
                     continue
 
             newstatements.append(st)
+
         return newstatements
+
+    def clean_layout(self, layout: ast.FeatureFile):
+        # Collect all referenced features
+        referenced = set()
+        for feature in layout.statements:
+            if not isinstance(feature, ast.FeatureBlock):
+                continue
+            for lookupref in feature.statements:
+                if not isinstance(lookupref, ast.LookupReferenceStatement):
+                    continue
+                referenced.add(lookupref.lookup.name)
+
+        newfeatures = []
+        # If there are any lookups within a feature but with no effective
+        # statements, remove them.
+        for feature in layout.statements:
+            if not isinstance(feature, ast.FeatureBlock):
+                newfeatures.append(feature)
+                continue
+            newstatements = []
+            for lookup in feature.statements:
+                if not isinstance(lookup, ast.LookupBlock) or lookup.name in referenced:
+                    newstatements.append(lookup)
+                    continue
+                effective = False
+                for statement in lookup.statements:
+                    if isinstance(statement, (ast.Comment, ast.LookupFlagStatement)):
+                        continue
+                    effective = True
+                    break
+                if effective:
+                    newstatements.append(lookup)
+                else:
+                    logger.warn(
+                        "Removing ineffective lookup %s in %s "
+                        % (lookup.name, feature.name)
+                    )
+            if newstatements and any(
+                [
+                    not isinstance(
+                        st, (ast.Comment, ast.ScriptStatement, ast.LanguageStatement)
+                    )
+                    for st in newstatements
+                ]
+            ):
+                feature.statements = newstatements
+                newfeatures.append(feature)
+        layout.statements = newfeatures
 
     def fix_context_and_check_applicable(self, rule) -> bool:
         # Slim context and inputs to only those glyphs we have
