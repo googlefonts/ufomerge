@@ -1,7 +1,9 @@
-from collections import defaultdict
+from __future__ import annotations
+
 import copy
 from io import StringIO
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, OrderedDict, Set, Tuple
@@ -36,6 +38,8 @@ class UFOMerger:
     codepoints: Iterable[int] = field(default_factory=list)
     layout_handling: str = "subset"
     existing_handling: str = "replace"
+    include_dir: Path | None = None
+    original_glyphlist: Iterable[str] | None = None
     # We would like to use a set here, but we need order preservation
     incoming_glyphset: dict[str, bool] = field(init=False)
     final_glyphset: Set[str] = field(init=False)
@@ -108,11 +112,17 @@ class UFOMerger:
         # Set up UFO2 features
         if self.layout_handling != "ignore":
             ufo2path = getattr(self.ufo2, "_path", None)
-            includeDir = Path(ufo2path).parent if ufo2path else None
+            includeDir = (
+                self.include_dir
+                if self.include_dir is not None
+                else Path(ufo2path).parent
+                if ufo2path
+                else None
+            )
             self.ufo2_features = Parser(
                 StringIO(self.ufo2.features.text),
                 includeDir=includeDir,
-                glyphNames=list(self.ufo2.keys()),
+                glyphNames=self.original_glyphlist or list(self.ufo2.keys()),
             ).parse()
         else:
             self.ufo2_features = ast.FeatureFile()
@@ -667,7 +677,9 @@ def merge_ufos(
     codepoints: Iterable[int] = [],
     layout_handling: str = "subset",
     existing_handling: str = "replace",
-):
+    include_dir: Path | None = None,
+    original_glyphlist: Iterable[str] | None = None,
+) -> None:
     """Merge two UFO files together
 
     Returns nothing but modifies ufo1.
@@ -696,6 +708,11 @@ def merge_ufos(
             if the donor glyph already exists in UFO1: "replace" replaces
             it with the version in UFO2; "skip" keeps the existing glyph.
             The default is "replace".
+        include_dir: The directory to look for include files in. If not
+            present, probes the UFO2 object for directory information.
+        original_glyphlist: The original glyph list for UFO2, for when you
+            already have a UFO with subset glyphs, but still need to subset
+            the features.
     """
     if layout_handling not in ["subset", "closure", "ignore"]:
         raise ValueError(f"Unknown layout handling mode '{layout_handling}'")
@@ -708,6 +725,8 @@ def merge_ufos(
         codepoints,
         layout_handling,
         existing_handling,
+        include_dir=include_dir,
+        original_glyphlist=original_glyphlist,
     ).merge()
 
 
@@ -717,7 +736,9 @@ def subset_ufo(
     exclude_glyphs: Iterable[str] = [],
     codepoints: Iterable[int] = [],
     layout_handling: str = "subset",
-):
+    include_dir: Path | None = None,
+    original_glyphlist: Iterable[str] | None = None,
+) -> Font:
     """Creates a new UFO with only the provided glyphs.
 
     Returns a new UFO object.
@@ -740,6 +761,11 @@ def subset_ufo(
             then when layout_handling=="subset", this rule will be dropped;
             but if layout_handling=="closure", glyph C will also be merged
             so that the ligature still works. The default is "subset".
+        include_dir: The directory to look for include files in. If not
+            present, probes the UFO2 object for directory information.
+        original_glyphlist: The original glyph list for UFO, for when you
+            already have a UFO with subset glyphs, but still need to subset
+            the features.
     """
     new_ufo = Font()
     new_ufo.info = copy.deepcopy(ufo.info)
@@ -750,5 +776,7 @@ def subset_ufo(
         exclude_glyphs,
         codepoints,
         layout_handling=layout_handling,
+        include_dir=include_dir,
+        original_glyphlist=original_glyphlist,
     )
     return new_ufo
