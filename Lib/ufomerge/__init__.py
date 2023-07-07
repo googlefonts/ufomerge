@@ -11,6 +11,7 @@ from typing import Iterable, OrderedDict, Set, Tuple
 from fontTools.feaLib.parser import Parser
 import fontTools.feaLib.ast as ast
 from ufoLib2 import Font
+from ufoLib2.objects import LayerSet, Layer
 
 logger = logging.getLogger("ufomerge")
 logging.basicConfig(level=logging.INFO)
@@ -173,7 +174,7 @@ class UFOMerger:
 
         self.merge_kerning()
 
-        # Now do the add
+        # Now do the add, first deal with the default layer.
         for glyph in self.incoming_glyphset.keys():
             if self.existing_handling == "skip" and glyph in self.ufo1:
                 logger.info(
@@ -192,6 +193,31 @@ class UFOMerger:
                 self.ufo1[glyph] = self.ufo2[glyph]
             else:
                 self.ufo1.addGlyph(self.ufo2[glyph])
+
+        # ... and then the other layers.
+        for ufo2_layer in self.ufo2.layers:
+            if ufo2_layer.name is self.ufo2.layers.defaultLayer:
+                continue
+            ufo1_layer = self.ufo1.layers.get(ufo2_layer.name)
+            if ufo1_layer is None:
+                logger.info(
+                    "Skipping merging layer '%s' because it is not present in ufo1",
+                    ufo2_layer.name,
+                )
+                continue
+            for glyph in self.incoming_glyphset.keys():
+                if glyph not in ufo2_layer:
+                    continue
+                if self.existing_handling == "skip" and glyph in ufo1_layer:
+                    logger.info(
+                        "Skipping glyph '%s' already present in target file" % glyph
+                    )
+                    continue
+                if glyph in ufo1_layer:
+                    ufo1_layer[glyph] = ufo2_layer[glyph]
+                else:
+                    ufo1_layer.addGlyph(ufo2_layer[glyph])
+
 
     def close_components(self, glyph: str):
         """Add any needed components, recursively"""
@@ -767,8 +793,13 @@ def subset_ufo(
             already have a UFO with subset glyphs, but still need to subset
             the features.
     """
-    new_ufo = Font()
-    new_ufo.info = copy.deepcopy(ufo.info)
+    new_ufo = Font(
+        info=copy.deepcopy(ufo.info),
+        layers=LayerSet.from_iterable(
+            [Layer(name=layer.name) for layer in ufo.layers],
+            defaultLayerName=ufo.layers.defaultLayer.name,
+        ),
+    )
     merge_ufos(
         new_ufo,
         ufo,
