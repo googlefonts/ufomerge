@@ -1,3 +1,4 @@
+from collections import defaultdict
 import copy
 from io import StringIO
 import logging
@@ -49,10 +50,46 @@ class UFOMerger:
 
         self.incoming_glyphset = dict.fromkeys(self.glyphs, True)
 
-        for glyph in self.ufo2:
-            if any(cp in self.codepoints for cp in glyph.unicodes):
-                if glyph.name is not None:
-                    self.incoming_glyphset[glyph.name] = True
+        # Now add codepoints
+        if self.codepoints:
+            existing_map = {}
+            to_delete = defaultdict(list)
+            for glyph in self.ufo1:
+                for cp in glyph.unicodes:
+                    existing_map[cp] = glyph.name
+
+            for glyph in self.ufo2:
+                for cp in glyph.unicodes:
+                    if cp in self.codepoints:
+                        # But see if we have a corresponding glyph already
+                        if cp in existing_map:
+                            if self.existing_handling == "skip":
+                                logger.info(
+                                    "Skipping codepoint U+%04X already present as '%s' in target file"
+                                    % (cp, glyph.name)
+                                )
+                                # Blacklist this glyph
+                                if glyph.name in self.incoming_glyphset:
+                                    del self.incoming_glyphset[glyph.name]
+                                break
+                            elif self.existing_handling == "replace":
+                                to_delete[existing_map[cp]].append(cp)
+                        if glyph.name is not None:
+                            self.incoming_glyphset[glyph.name] = True
+
+            # Clear up any glyphs for UFO1 we don't want any more
+            for glyphname, codepoints in to_delete.items():
+                self.ufo1[glyphname].unicodes = list(
+                    set(self.ufo1[glyphname].unicodes) - set(codepoints)
+                )
+                codepoints_string = ", ".join("U+%04X" % cp for cp in codepoints)
+                logger.info(
+                    "Removing mappings %s from glyph '%s' due to incoming codepoints"
+                    % (codepoints_string, glyphname)
+                )
+                # We *could* delete it from the target glyphset, but there
+                # is a problem here - what if it's actually mentioned in the
+                # feature file?! So we don't.
 
         for glyph in self.exclude_glyphs:
             del self.incoming_glyphset[glyph]
