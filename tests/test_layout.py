@@ -123,3 +123,38 @@ def test_languagesystems(helpers):
       } ccmp;
     """,
     )
+
+
+def test_drop_contextual_empty_class(helpers):
+    ufo2 = helpers.create_ufo_from_features(
+        """
+        @DAGESH = [dagesh-hb];
+        @OFFENDING_PUNCTUATION = [period];
+
+        lookup hebrew_mark_resolve_clashing_punctuation {
+            lookupflag RightToLeft;
+            pos [vav-hb zayin-hb] @DAGESH @OFFENDING_PUNCTUATION' 60;
+        } hebrew_mark_resolve_clashing_punctuation;
+
+        feature kern {
+            lookup hebrew_mark_resolve_clashing_punctuation;
+        } kern;
+        """
+    )
+    ufo1 = subset_ufo(ufo2, glyphs=["period"])
+
+    helpers.assert_features_similar(
+        ufo1,
+        """
+        @DAGESH = [];
+        @OFFENDING_PUNCTUATION = [period];
+
+        lookup hebrew_mark_resolve_clashing_punctuation {
+            lookupflag RightToLeft;
+        } hebrew_mark_resolve_clashing_punctuation;
+
+        feature kern {
+            lookup hebrew_mark_resolve_clashing_punctuation;
+        } kern;
+        """,
+    )

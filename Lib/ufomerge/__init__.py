@@ -452,7 +452,11 @@ class UFOMerger:
                 st.suffix = self.filter_sequence(st.suffix)
                 container, vr = st.pos[0]
                 st.pos = [(self.filter_glyph_container(container), vr)]
-                if not st.pos[0][0].glyphSet():
+                if (
+                    any(not sequence.glyphSet() for sequence in st.prefix)
+                    or any(not sequence.glyphSet() for sequence in st.suffix)
+                    or not st.pos[0][0].glyphSet()
+                ):
                     continue
 
             newstatements.append(st)
