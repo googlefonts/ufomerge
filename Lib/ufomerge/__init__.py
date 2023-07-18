@@ -503,7 +503,9 @@ class UFOMerger:
         # Collect all referenced lookups
         referenced = set()
         for feature in layout.statements:
-            if not isinstance(feature, (ast.FeatureBlock, ast.LookupBlock)):
+            if not isinstance(
+                feature, (ast.FeatureBlock, ast.LookupBlock, ast.VariationBlock)
+            ):
                 continue
             for statement in feature.statements:
                 if isinstance(statement, ast.LookupReferenceStatement):
