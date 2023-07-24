@@ -664,6 +664,9 @@ class UFOMerger:
             return container
         if isinstance(container, ast.GlyphClass):
             container.glyphs = self.filter_glyphs(container.glyphs)
+            # I don't know what `original` is for, but it can undo subsetting
+            # when calling asFea():
+            container.original = []
             return container
         if isinstance(container, ast.GlyphClassName):
             # Filter the class, see if there's anything left
