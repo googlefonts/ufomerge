@@ -332,6 +332,10 @@ class UFOMerger:
                 substantive_statements = [
                     x for x in st.statements if not isinstance(x, ast.Comment)
                 ]
+                if len(substantive_statements) == 1 and isinstance(
+                    substantive_statements[0], ast.LookupFlagStatement
+                ):
+                    substantive_statements.clear()
                 if not substantive_statements:
                     if isinstance(st, ast.FeatureBlock):
                         continue

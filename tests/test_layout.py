@@ -150,7 +150,6 @@ def test_drop_contextual_empty_class(helpers):
         @OFFENDING_PUNCTUATION = [period];
 
         lookup hebrew_mark_resolve_clashing_punctuation {
-            lookupflag RightToLeft;
         } hebrew_mark_resolve_clashing_punctuation;
 
         feature kern {
