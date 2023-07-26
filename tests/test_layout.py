@@ -157,3 +157,32 @@ def test_drop_contextual_empty_class(helpers):
         } kern;
         """,
     )
+
+def test_drop_mark_class(helpers):
+    ufo2 = helpers.create_ufo_from_features(
+        """
+        @something = [ a c ];
+
+        markClass @something <anchor 100 200> @MC_above;
+
+        feature mark {
+            lookup MARK_BASE_above {
+                @bGC_A_above = [A];
+                pos base @bGC_A_above <anchor 150 200> mark @MC_above;
+            } MARK_BASE_above;
+        } mark;
+        """
+    )
+    ufo1 = subset_ufo(ufo2, glyphs=["A"])
+
+    helpers.assert_features_similar(
+        ufo1,
+        """
+        @something = [];
+        feature mark {
+            lookup MARK_BASE_above {
+                @bGC_A_above = [A];
+            } MARK_BASE_above;
+        } mark;
+        """,
+    )

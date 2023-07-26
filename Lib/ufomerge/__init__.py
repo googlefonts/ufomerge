@@ -6,7 +6,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, OrderedDict, Set, Tuple
+from typing import Any, Iterable, Mapping, OrderedDict, Set, Tuple
 
 from fontTools.feaLib.parser import Parser
 import fontTools.feaLib.ast as ast
@@ -506,13 +506,18 @@ class UFOMerger:
     def clean_layout(self, layout: ast.FeatureFile):
         # Collect all referenced lookups
         referenced = set()
+        referenced_mark_classes = set()
         for feature in layout.statements:
             if not isinstance(
                 feature, (ast.FeatureBlock, ast.LookupBlock, ast.VariationBlock)
             ):
+                if isinstance(feature, ast.MarkClassDefinition):
+                    referenced_mark_classes.add(feature.markClass.name)
                 continue
             for statement in feature.statements:
-                if isinstance(statement, ast.LookupReferenceStatement):
+                if isinstance(feature, ast.MarkClassDefinition):
+                    referenced_mark_classes.add(feature.markClass.name)
+                elif isinstance(statement, ast.LookupReferenceStatement):
                     referenced.add(statement.lookup.name)
                 if hasattr(statement, "lookups"):
                     for lookuplist in statement.lookups:
@@ -540,6 +545,19 @@ class UFOMerger:
                     newstatements.append(lookup)
                     continue
                 effective = False
+                # Filter out statements using dropped mark classes.
+                filtered_statements = []
+                for statement in lookup.statements:
+                    if isinstance(statement, ast.MarkBasePosStatement):
+                        statement.marks = [
+                            (anchor, mark_class)
+                            for anchor, mark_class in statement.marks
+                            if mark_class.name in referenced_mark_classes
+                        ]
+                        if not statement.marks:
+                            continue
+                    filtered_statements.append(statement)
+                lookup.statements = filtered_statements
                 for statement in lookup.statements:
                     if isinstance(statement, (ast.Comment, ast.LookupFlagStatement)):
                         continue
@@ -644,6 +662,11 @@ class UFOMerger:
     def filter_glyphs(self, glyphs: Iterable[str]) -> list[str]:
         return [glyph for glyph in glyphs if glyph in self.final_glyphset]
 
+    def filter_glyph_mapping(self, glyphs: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            name: data for name, data in glyphs.items() if name in self.final_glyphset
+        }
+
     def filter_sequence(self, slots: Iterable) -> list[list[str]]:
         newslots = []
         for slot in slots:
@@ -675,6 +698,12 @@ class UFOMerger:
             if classdef.glyphs:
                 return container
             return ast.GlyphClass([])
+        if isinstance(container, ast.MarkClassName):
+            markclass = container.markClass
+            markclass.glyphs = self.filter_glyph_mapping(markclass.glyphs)
+            if markclass.glyphs:
+                return container
+            return ast.MarkClass([])
         raise ValueError(f"Unknown glyph container {container}")
 
     # Routines for merging font lib keys
