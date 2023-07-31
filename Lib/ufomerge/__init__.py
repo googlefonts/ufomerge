@@ -639,24 +639,49 @@ class UFOMerger:
         for glyph in groups2.keys():
             groups2[glyph] = self.filter_glyphs(groups2[glyph])
 
-        for (l, r), value in self.ufo2.kerning.items():
-            left_glyphs = self.filter_glyphs(groups2.get(l, [l]))
-            right_glyphs = self.filter_glyphs(groups2.get(r, [r]))
+        # Clean glyphs to be imported from the target UFO kerning groups, so
+        # importing the source kerning then does not lead to duplicate group
+        # membership if their memebership changed.
+        kerning_groups_to_be_cleaned = []
+        for group_name in list(groups1.keys()):
+            members = groups1[group_name]
+            new_members = [
+                member for member in members if member not in self.incoming_glyphset
+            ]
+            if new_members:
+                groups1[group_name] = new_members
+            else:
+                del groups1[group_name]
+                kerning_groups_to_be_cleaned.append(group_name)
+        self.ufo1.kerning = {
+            (first, second): value
+            for (first, second), value in self.ufo1.kerning.items()
+            if first not in kerning_groups_to_be_cleaned
+            and second not in kerning_groups_to_be_cleaned
+        }
+
+        for (first, second), value in self.ufo2.kerning.items():
+            left_glyphs = self.filter_glyphs(groups2.get(first, [first]))
+            right_glyphs = self.filter_glyphs(groups2.get(second, [second]))
             if not left_glyphs or not right_glyphs:
                 continue
 
             # Just add for now. We should get fancy later
-            self.ufo1.kerning[(l, r)] = value
-            if l.startswith("public.kern"):
-                if l not in groups1:
-                    groups1[l] = groups2[l]
+            self.ufo1.kerning[(first, second)] = value
+            if first.startswith("public.kern"):
+                if first not in groups1:
+                    groups1[first] = groups2[first]
                 else:
-                    groups1[l] = self.filter_glyphs(set(groups1[l] + groups2[l]))
-            if r.startswith("public.kern"):
-                if r not in groups1:
-                    groups1[r] = groups2[r]
+                    groups1[first] = self.filter_glyphs(
+                        set(groups1[first] + groups2[first])
+                    )
+            if second.startswith("public.kern"):
+                if second not in groups1:
+                    groups1[second] = groups2[second]
                 else:
-                    groups1[r] = self.filter_glyphs(set(groups1[r] + groups2[r]))
+                    groups1[second] = self.filter_glyphs(
+                        set(groups1[second] + groups2[second])
+                    )
 
     # Utility routines
     def filter_glyphs(self, glyphs: Iterable[str]) -> list[str]:
