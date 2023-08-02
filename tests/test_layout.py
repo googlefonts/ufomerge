@@ -232,3 +232,29 @@ def test_deduplicate_classes(helpers):
         } rlig;
         """,
     )
+
+
+def test_recurse_into_blocks(helpers):
+    """Test that lookups referenced inside nested lookups are recognized and kept."""
+
+    features = """
+        lookup foo {
+            sub a by b;
+        } foo;
+        lookup bar {
+            sub c' by d c;
+        } bar;
+
+        feature ccmp {
+            lookup testing {
+                sub a' lookup foo c' lookup bar;
+            } testing;
+        } ccmp;
+        """
+    ufo2 = helpers.create_ufo_from_features(features)
+
+    # Keep all glyphs.
+    ufo1 = subset_ufo(ufo2, glyphs=["a", "b", "c", "d"])
+
+    # Features should be identical.
+    helpers.assert_features_similar(ufo1, features)

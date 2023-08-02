@@ -525,20 +525,7 @@ class UFOMerger:
                 if isinstance(feature, ast.MarkClassDefinition):
                     referenced_mark_classes.add(feature.markClass.name)
                 continue
-            for statement in feature.statements:
-                if isinstance(feature, ast.MarkClassDefinition):
-                    referenced_mark_classes.add(feature.markClass.name)
-                elif isinstance(statement, ast.LookupReferenceStatement):
-                    referenced.add(statement.lookup.name)
-                if hasattr(statement, "lookups"):
-                    for lookuplist in statement.lookups:
-                        if lookuplist is None:
-                            continue
-                        if isinstance(lookuplist, (list, tuple)):
-                            for lookup in lookuplist:
-                                referenced.add(lookup.name)
-                        else:
-                            referenced.add(lookuplist.name)
+            search_block(feature, referenced, referenced_mark_classes)
 
         newfeatures = []
         # If there are any lookups within a feature but with no effective
@@ -820,6 +807,29 @@ def _deduplicate_class_defs(
                 class_def.name = new_class_name
 
     return fresh_class_defs
+
+
+def search_block(
+    block: ast.Block, referenced: set[str], referenced_mark_classes: set[str]
+) -> None:
+    """Recursively search a block for references to lookups and mark classes."""
+    for statement in block.statements:
+        if isinstance(block, ast.MarkClassDefinition):
+            referenced_mark_classes.add(block.markClass.name)
+        elif isinstance(statement, ast.LookupReferenceStatement):
+            referenced.add(statement.lookup.name)
+        if hasattr(statement, "lookups"):
+            # Is a ChainContextPosStatement or ChainContextSubstStatement.
+            for lookuplist in statement.lookups:
+                if lookuplist is None:
+                    continue
+                if isinstance(lookuplist, (list, tuple)):
+                    for lookup in lookuplist:
+                        referenced.add(lookup.name)
+                else:
+                    referenced.add(lookuplist.name)
+        if hasattr(statement, "statements"):
+            search_block(statement, referenced, referenced_mark_classes)
 
 
 def merge_ufos(
