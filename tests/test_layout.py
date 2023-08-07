@@ -146,8 +146,8 @@ def test_drop_contextual_empty_class(helpers):
     helpers.assert_features_similar(
         ufo1,
         """
-        @DAGESH = [];
         @OFFENDING_PUNCTUATION = [period];
+        @DAGESH = [];
 
         lookup hebrew_mark_resolve_clashing_punctuation {
         } hebrew_mark_resolve_clashing_punctuation;
@@ -157,6 +157,7 @@ def test_drop_contextual_empty_class(helpers):
         } kern;
         """,
     )
+
 
 def test_drop_mark_class(helpers):
     ufo2 = helpers.create_ufo_from_features(
@@ -178,11 +179,56 @@ def test_drop_mark_class(helpers):
     helpers.assert_features_similar(
         ufo1,
         """
-        @something = [];
-        feature mark {
-            lookup MARK_BASE_above {
-                @bGC_A_above = [A];
-            } MARK_BASE_above;
-        } mark;
+        @bGC_A_above = [A];
+        @something = [];""",
+    )
+
+
+def test_deduplicate_classes(helpers):
+    ufo2 = helpers.create_ufo_from_features(
+        """
+        @SOMETHING = [a b c];
+        @SOMETHING_ALT = [a.alt b.alt c.alt];
+
+        feature kern {
+            pos @SOMETHING @SOMETHING_ALT 60;
+            pos @SOMETHING_ALT @SOMETHING 30;
+        } kern;
+
+        feature locl {
+            sub @SOMETHING by @SOMETHING_ALT;
+        } locl;
+
+        feature rlig {
+            lookup bla {
+                @FOO = [b c];
+                sub @FOO a' @SOMETHING by b.alt;
+            } bla;
+        } rlig;
+        """
+    )
+    ufo1 = subset_ufo(ufo2, glyphs=["a", "a.alt", "b.alt", "c", "c.alt"])
+
+    helpers.assert_features_similar(
+        ufo1,
+        """
+        @FOO = [c];
+        @SOMETHING_ALT = [a.alt b.alt c.alt];
+        @SOMETHING = [a c];
+
+        feature kern {
+            pos @SOMETHING @SOMETHING_ALT 60;
+            pos @SOMETHING_ALT @SOMETHING 30;
+        } kern;
+
+        feature locl {
+            sub [a c] by [a.alt c.alt];
+        } locl;
+
+        feature rlig {
+            lookup bla {
+                sub @FOO a' @SOMETHING by b.alt;
+            } bla;
+        } rlig;
         """,
     )

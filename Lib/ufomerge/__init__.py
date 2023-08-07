@@ -46,6 +46,7 @@ class UFOMerger:
     final_glyphset: Set[str] = field(init=False)
     ufo2_features: ast.FeatureFile = field(init=False)
     ufo2_languagesystems: list[Tuple[str, str]] = field(init=False)
+    class_name_references: dict[str, list[ast.GlyphClassName]] = field(init=False)
 
     def __post_init__(self):
         # Set up the glyphset
@@ -129,6 +130,10 @@ class UFOMerger:
             self.ufo2_features = ast.FeatureFile()
         self.ufo2_languagesystems = []
 
+        # We might filter named classes per statement. Collect them by name here
+        # and deduplicate them later.
+        self.class_name_references = defaultdict(list)
+
     def merge(self):
         if not self.incoming_glyphset:
             logger.info("No glyphs selected, nothing to do")
@@ -164,6 +169,11 @@ class UFOMerger:
             self.ufo2_features.statements = self.filter_layout(
                 self.ufo2_features.statements
             )
+            # At this point, all previous class definitions should have been
+            # dropped from the AST, and we can insert new deduplicated ones.
+            fresh_class_defs = _deduplicate_class_defs(self.class_name_references)
+            for class_def in fresh_class_defs:
+                self.ufo2_features.statements.insert(0, class_def)
             self.clean_layout(self.ufo2_features)
             self.ufo1.features.text += self.ufo2_features.asFea()
             self.add_language_systems()
@@ -217,7 +227,6 @@ class UFOMerger:
                     ufo1_layer[glyph] = ufo2_layer[glyph]
                 else:
                     ufo1_layer.addGlyph(ufo2_layer[glyph])
-
 
     def close_components(self, glyph: str):
         """Add any needed components, recursively"""
@@ -343,7 +352,9 @@ class UFOMerger:
                 newstatements.append(st)
                 continue
             if isinstance(st, ast.GlyphClassDefinition):
-                st.glyphs = self.filter_glyph_container(st.glyphs)
+                # Handled separately. This means we drop all class definitions
+                # up front.
+                continue
             if isinstance(
                 st,
                 (
@@ -717,11 +728,20 @@ class UFOMerger:
             container.original = []
             return container
         if isinstance(container, ast.GlyphClassName):
+            # Make a copy of the container, we'll deduplicate and correct names
+            # in a second pass later.
+            container_copy = copy.deepcopy(container)
+            copy_list = self.class_name_references[container_copy.glyphclass.name]
+            container_copy.glyphclass.name = (
+                f"{container_copy.glyphclass.name}_{len(copy_list)}"
+            )
+            copy_list.append(container_copy)
+
             # Filter the class, see if there's anything left
-            classdef = container.glyphclass.glyphs
+            classdef = container_copy.glyphclass.glyphs
             classdef.glyphs = self.filter_glyphs(classdef.glyphs)
             if classdef.glyphs:
-                return container
+                return container_copy
             return ast.GlyphClass([])
         if isinstance(container, ast.MarkClassName):
             markclass = container.markClass
@@ -756,6 +776,50 @@ class UFOMerger:
             else:
                 return
         lib1[name][glyph] = lib2[name][glyph]
+
+
+def _deduplicate_class_defs(
+    class_name_references: dict[str, list[ast.GlyphClassName]],
+) -> list[ast.GlyphClassDefinition]:
+    """Deduplicate class definitions with the same glyph set.
+
+    We let each statement do its own filtering of class definitions to preserve
+    semantics going in, but then need to deduplicate the resulting class
+    definitions.
+    """
+    fresh_class_defs = []
+
+    for class_name, class_defs in class_name_references.items():
+        by_glyph_set: dict[tuple[str, ...], list[ast.GlyphClassDefinition]]
+        by_glyph_set = defaultdict(list)
+        for class_def in class_defs:
+            glyph_set = tuple(sorted(class_def.glyphclass.glyphs.glyphSet()))
+            by_glyph_set[glyph_set].append(class_def.glyphclass)
+
+        for index, (glyph_set, class_defs) in enumerate(by_glyph_set.items(), start=1):
+            # No need to deduplicate.
+            if len(by_glyph_set) == 1:
+                new_class_def = ast.GlyphClassDefinition(
+                    class_name, ast.GlyphClass([ast.GlyphName(g) for g in glyph_set])
+                )
+                fresh_class_defs.append(new_class_def)
+                # Update references
+                for class_def in class_defs:
+                    class_def.name = class_name
+                continue
+
+            # Deduplicate
+            new_class_name = f"{class_name}_{index}"
+            new_class_def = ast.GlyphClassDefinition(
+                new_class_name, ast.GlyphClass([ast.GlyphName(g) for g in glyph_set])
+            )
+            fresh_class_defs.append(new_class_def)
+
+            # Update references
+            for class_def in class_defs:
+                class_def.name = new_class_name
+
+    return fresh_class_defs
 
 
 def merge_ufos(
