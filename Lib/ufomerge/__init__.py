@@ -518,18 +518,21 @@ class UFOMerger:
         # Collect all referenced lookups
         referenced = set()
         referenced_mark_classes = set()
-        for feature in layout.statements:
+
+        def collect_references(feature):
             if not isinstance(
                 feature, (ast.FeatureBlock, ast.LookupBlock, ast.VariationBlock)
             ):
                 if isinstance(feature, ast.MarkClassDefinition):
                     referenced_mark_classes.add(feature.markClass.name)
-                continue
+                return
             for statement in feature.statements:
                 if isinstance(feature, ast.MarkClassDefinition):
                     referenced_mark_classes.add(feature.markClass.name)
                 elif isinstance(statement, ast.LookupReferenceStatement):
                     referenced.add(statement.lookup.name)
+                if isinstance(statement, ast.LookupBlock):
+                    collect_references(statement)
                 if hasattr(statement, "lookups"):
                     for lookuplist in statement.lookups:
                         if lookuplist is None:
@@ -539,6 +542,9 @@ class UFOMerger:
                                 referenced.add(lookup.name)
                         else:
                             referenced.add(lookuplist.name)
+
+        for feature in layout.statements:
+            collect_references(feature)
 
         newfeatures = []
         # If there are any lookups within a feature but with no effective
