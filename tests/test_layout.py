@@ -84,7 +84,6 @@ feature kern {
 def test_languagesystems(helpers):
     ufo1 = helpers.create_ufo_from_features(
         """
-      languagesystem DFLT dflt;
       languagesystem latn dflt;
       feature ccmp { sub A by B; } ccmp;
     """

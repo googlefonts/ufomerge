@@ -629,24 +629,38 @@ class UFOMerger:
         featurefile = Parser(
             StringIO(self.ufo1.features.text), glyphNames=list(self.final_glyphset)
         ).parse()
-        current = []
-        last = None
-        for lss in featurefile.statements:
+
+        new_lss = []
+        first_lss_index = None
+        last_lss_index = None
+        # Add existing ones
+        for ix, lss in enumerate(featurefile.statements):
             if isinstance(lss, ast.LanguageSystemStatement):
-                current.append((lss.script, lss.language))
-                last = lss
+                new_lss.append((lss.script, lss.language))
+                if first_lss_index is None:
+                    first_lss_index = ix
+                last_lss_index = ix
+
         # If all new LSS are included in current, we're done.
-        to_add = []
+        needs_adding = False
         for pair in self.ufo2_languagesystems:
-            if pair not in current:
-                to_add.append(ast.LanguageSystemStatement(*pair))
-        if not to_add:
+            if pair not in new_lss:
+                new_lss.append(pair)
+                needs_adding = True
+        if not needs_adding:
             return
-        if last is None:
-            last_index = 0
-        else:
-            last_index = featurefile.statements.index(last)
-        featurefile.statements[last_index + 1 : last_index + 1] = to_add
+
+        if first_lss_index is None:
+            first_lss_index = 0
+            last_lss_index = 0
+
+        # Hoist DFLT,dflt to first
+        if ("DFLT", "dflt") in new_lss:
+            new_lss.insert(0, new_lss.pop(new_lss.index(("DFLT", "dflt"))))
+
+        featurefile.statements[first_lss_index : last_lss_index + 1] = [
+            ast.LanguageSystemStatement(*pair) for pair in new_lss
+        ]
         self.ufo1.features.text = featurefile.asFea()
 
     def merge_kerning(self):
