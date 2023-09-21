@@ -44,6 +44,7 @@ class UFOMerger:
     # We would like to use a set here, but we need order preservation
     incoming_glyphset: dict[str, bool] = field(init=False)
     final_glyphset: Set[str] = field(init=False)
+    blacklisted: Set[str] = field(init=False)
     ufo2_features: ast.FeatureFile = field(init=False)
     ufo2_languagesystems: list[Tuple[str, str]] = field(init=False)
     class_name_references: dict[str, list[ast.GlyphClassName]] = field(init=False)
@@ -64,6 +65,7 @@ class UFOMerger:
                 for cp in glyph.unicodes:
                     existing_map[cp] = glyph.name
 
+            self.blacklisted = set([])
             for glyph in self.ufo2:
                 for cp in glyph.unicodes:
                     if cp in self.codepoints:
@@ -72,16 +74,18 @@ class UFOMerger:
                             if self.existing_handling == "skip":
                                 logger.info(
                                     "Skipping codepoint U+%04X already present as '%s' in target file"
-                                    % (cp, glyph.name)
+                                    % (cp, existing_map[cp])
                                 )
-                                # Blacklist this glyph
-                                if glyph.name in self.incoming_glyphset:
-                                    del self.incoming_glyphset[glyph.name]
-                                break
+                                # Blacklist this glyph (it may come back
+                                # because of layout/component closure.)
+                                self.blacklisted.add(glyph.name)
                             elif self.existing_handling == "replace":
                                 to_delete[existing_map[cp]].append(cp)
                         if glyph.name is not None:
                             self.incoming_glyphset[glyph.name] = True
+
+            for glyph in self.blacklisted:
+                del self.incoming_glyphset[glyph]
 
             # Clear up any glyphs for UFO1 we don't want any more
             for glyphname, codepoints in to_delete.items():
@@ -181,6 +185,10 @@ class UFOMerger:
         # list() avoids "Set changed size during iteration" error
         for glyph in list(self.incoming_glyphset.keys()):
             self.close_components(glyph)
+
+        for glyph in self.blacklisted:
+            if glyph in self.incoming_glyphset:
+                self.ufo2[glyph].unicodes = []
 
         self.merge_kerning()
 
