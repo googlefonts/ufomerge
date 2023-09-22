@@ -214,7 +214,7 @@ class UFOMerger:
 
         # ... and then the other layers.
         for ufo2_layer in self.ufo2.layers:
-            if ufo2_layer.name is self.ufo2.layers.defaultLayer:
+            if ufo2_layer.name == self.ufo2.layers.defaultLayer.name:
                 continue
             ufo1_layer = self.ufo1.layers.get(ufo2_layer.name)
             if ufo1_layer is None:
