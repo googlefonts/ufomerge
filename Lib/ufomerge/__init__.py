@@ -56,6 +56,7 @@ class UFOMerger:
             self.glyphs = self.ufo2.keys()
 
         self.incoming_glyphset = dict.fromkeys(self.glyphs, True)
+        self.blacklisted = set([])
 
         # Now add codepoints
         if self.codepoints:
@@ -65,7 +66,6 @@ class UFOMerger:
                 for cp in glyph.unicodes:
                     existing_map[cp] = glyph.name
 
-            self.blacklisted = set([])
             for glyph in self.ufo2:
                 for cp in glyph.unicodes:
                     if cp in self.codepoints:
