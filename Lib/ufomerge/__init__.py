@@ -660,7 +660,7 @@ class UFOMerger:
 
         if first_lss_index is None:
             first_lss_index = 0
-            last_lss_index = 0
+            last_lss_index = -1
 
         # Hoist DFLT,dflt to first
         if ("DFLT", "dflt") in new_lss:
