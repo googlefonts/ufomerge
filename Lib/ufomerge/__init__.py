@@ -700,8 +700,8 @@ class UFOMerger:
         }
 
         for (first, second), value in self.ufo2.kerning.items():
-            left_glyphs = self.filter_glyphs(groups2.get(first, [first]))
-            right_glyphs = self.filter_glyphs(groups2.get(second, [second]))
+            left_glyphs = self.filter_glyphs_incoming(groups2.get(first, [first]))
+            right_glyphs = self.filter_glyphs_incoming(groups2.get(second, [second]))
             if not left_glyphs or not right_glyphs:
                 continue
 
@@ -725,6 +725,9 @@ class UFOMerger:
     # Utility routines
     def filter_glyphs(self, glyphs: Iterable[str]) -> list[str]:
         return [glyph for glyph in glyphs if glyph in self.final_glyphset]
+    
+    def filter_glyphs_incoming(self, glyphs: Iterable[str]) -> list[str]:
+        return [glyph for glyph in glyphs if glyph in self.incoming_glyphset]
 
     def filter_glyph_mapping(self, glyphs: Mapping[str, Any]) -> dict[str, Any]:
         return {
