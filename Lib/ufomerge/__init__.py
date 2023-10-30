@@ -676,7 +676,7 @@ class UFOMerger:
         groups2 = self.ufo2.groups
         # Slim down the groups to only those in the glyph set
         for glyph in groups2.keys():
-            groups2[glyph] = self.filter_glyphs(groups2[glyph])
+            groups2[glyph] = self.filter_glyphs_incoming(groups2[glyph])
 
         # Clean glyphs to be imported from the target UFO kerning groups, so
         # importing the source kerning then does not lead to duplicate group
