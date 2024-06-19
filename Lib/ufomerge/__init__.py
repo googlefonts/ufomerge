@@ -107,7 +107,7 @@ class UFOMerger:
         # Check those glyphs actually are in UFO 2
         not_there = set(self.incoming_glyphset) - set(self.ufo2.keys())
         if len(not_there):
-            logger.warn(
+            logger.warning(
                 "The following glyphs were not in UFO 2: %s" % ", ".join(not_there)
             )
             for glyph in not_there:
@@ -591,7 +591,7 @@ class UFOMerger:
                 if effective:
                     newstatements.append(lookup)
                 else:
-                    logger.warn(
+                    logger.warning(
                         "Removing ineffective lookup %s in %s "
                         % (lookup.name, feature.name)
                     )
