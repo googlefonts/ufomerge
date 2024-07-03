@@ -27,3 +27,6 @@ where = ["Lib"]
 
 [tool.setuptools_scm]
 write_to = "Lib/ufomerge/_version.py"
+
+[tool.pytest.ini_options]
+filterwarnings = ["ignore::DeprecationWarning"]
