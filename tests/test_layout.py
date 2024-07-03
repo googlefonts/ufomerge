@@ -146,15 +146,7 @@ def test_drop_contextual_empty_class(helpers):
         ufo1,
         """
         @OFFENDING_PUNCTUATION = [period];
-        @DAGESH = [];
-
-        lookup hebrew_mark_resolve_clashing_punctuation {
-        } hebrew_mark_resolve_clashing_punctuation;
-
-        feature kern {
-            lookup hebrew_mark_resolve_clashing_punctuation;
-        } kern;
-        """,
+        @DAGESH = [];""",
     )
 
 
@@ -178,7 +170,6 @@ def test_drop_mark_class(helpers):
     helpers.assert_features_similar(
         ufo1,
         """
-        @bGC_A_above = [A];
         @something = [];""",
     )
 
