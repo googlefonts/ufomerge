@@ -231,3 +231,20 @@ def test_deduplicate_classes(helpers):
         } rlig;
         """,
     )
+
+
+def test_cull_unwanted_named_features(helpers) -> None:
+    ufo1 = helpers.create_ufo([])
+    ufo2 = helpers.create_ufo(["a", "a.alt", "b"])
+    ufo2.features.text = """
+        feature ss01 {
+            featureNames {
+                name "Single story a";
+            };
+            sub a by a.alt;
+        } ss01;
+    """
+
+    merge_ufos(ufo1, ufo2, ["b"])
+
+    assert "ss01" not in ufo1.features.text
