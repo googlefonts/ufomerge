@@ -13,7 +13,7 @@ import fontTools.feaLib.ast as ast
 from ufoLib2 import Font
 from ufoLib2.objects import LayerSet, Layer
 
-from ufomerge.layout import LayoutClosure, LayoutSubsetter
+from ufomerge.layout import LayoutClosureVisitor, LayoutSubsetter
 
 logger = logging.getLogger("ufomerge")
 logging.basicConfig(level=logging.INFO)
@@ -140,11 +140,10 @@ class UFOMerger:
             count = len(self.final_glyphset)
             rounds = 0
             while True:
-                closure = LayoutClosure(
+                LayoutClosureVisitor(
                     incoming_glyphset=self.incoming_glyphset,
                     glyphset=self.final_glyphset,
-                )
-                closure.perform_layout_closure(self.ufo2_features.statements)
+                ).visit(self.ufo2_features)
                 rounds += 1
                 if len(self.final_glyphset) == count:
                     break
@@ -156,9 +155,7 @@ class UFOMerger:
 
         if self.layout_handling != "ignore":
             subsetter = LayoutSubsetter(glyphset=self.final_glyphset)
-            self.ufo2_features.statements = subsetter.subset(
-                self.ufo2_features.statements
-            )
+            subsetter.subset(self.ufo2_features)
             self.ufo1.features.text += self.ufo2_features.asFea()
             self.add_language_systems(subsetter.incoming_language_systems)
 
