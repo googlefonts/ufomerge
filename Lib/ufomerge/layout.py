@@ -141,7 +141,7 @@ def visit(visitor, st, *args, **kwargs):
             after = filter_sequence(
                 before, visitor.glyphset, visitor.class_name_references
             )
-            if before and not after:
+            if has_any_empty_slots(after):
                 keep = False
             setattr(st, method, after)
 
