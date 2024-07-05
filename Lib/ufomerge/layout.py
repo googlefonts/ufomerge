@@ -406,6 +406,18 @@ def visit(visitor, st, *args, **kwargs):
     return False
 
 
+@LayoutSubsetVisitor.register(ast.ScriptStatement)
+def visit(visitor, st, *args, **kwargs):
+    st._keep = "maybe"
+    return False
+
+
+@LayoutSubsetVisitor.register(ast.LanguageStatement)
+def visit(visitor, st, *args, **kwargs):
+    st._keep = "maybe"
+    return False
+
+
 class LayoutClosureVisitor(Visitor):
     """Make sure that anything that can be produced by substitution rules
     added to the new UFO will also be added to the glyphset.
