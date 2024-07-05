@@ -15,7 +15,7 @@ classifiers = [
   'Topic :: Text Processing :: Fonts',
 ]
 dependencies = [
-  'fontTools',
+  'fontTools>=4.53.1',  # We need visitor inheritance, introduced in 4.53.1
   'ufoLib2',
 ]
 
