@@ -481,7 +481,7 @@ def visit(visitor, st, *args, **kwargs):
         )
 
 
-@LayoutClosureVisitor.register(ast.SinglePosStatement)
+@LayoutClosureVisitor.register(ast.SingleSubstStatement)
 def visit(visitor, st, *args, **kwargs):
     originals = st.glyphs[0].glyphSet()
     replaces = st.replacements[0].glyphSet()
