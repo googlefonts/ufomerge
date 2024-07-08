@@ -120,13 +120,15 @@ def main(args=None):
     if args.glyphs == "*":
         glyphs = ufo2.keys()
     elif args.glyphs_file:
-        glyphs = set(open(args.glyphs_file).read().splitlines())
+        glyphs = set(open(args.glyphs_file, encoding="utf-8").read().splitlines())
     elif args.glyphs:
         glyphs = set(args.glyphs.split(","))
     if args.codepoints:
         codepoints = set(args.codepoints.split(","))
     elif args.codepoints_file:
-        codepoints = set(open(args.codepoints_file).read().splitlines())
+        codepoints = set(
+            open(args.codepoints_file, encoding="utf-8").read().splitlines()
+        )
     else:
         codepoints = []
     if codepoints:
@@ -135,7 +137,9 @@ def main(args=None):
     if args.exclude_glyphs:
         exclude_glyphs = set(args.exclude_glyphs.split(","))
     elif args.exclude_glyphs_file:
-        exclude_glyphs = set(open(args.exclude_glyphs_file).read().splitlines())
+        exclude_glyphs = set(
+            open(args.exclude_glyphs_file, encoding="utf-8").read().splitlines()
+        )
     else:
         exclude_glyphs = set()
 

@@ -1,19 +1,17 @@
-import copy
 import logging
-from dataclasses import dataclass, field
 from collections import defaultdict
-from typing import Any, Dict, Iterable, Mapping, OrderedDict, Sequence, Set
-import enum
+from dataclasses import dataclass, field
+from typing import Dict, OrderedDict, Set
 
 from fontTools.feaLib import ast
 from fontTools.misc.visitor import Visitor
+
 from ufomerge.utils import (
     filter_glyph_container,
+    filter_glyphs,
     filter_sequence,
     has_any_empty_slots,
-    filter_glyphs,
 )
-
 
 logger = logging.getLogger("ufomerge.layout")
 
@@ -395,31 +393,31 @@ def visit(visitor, st, *args, **kwargs):
 
 
 @LayoutSubsetVisitor.register(ast.Comment)
-def visit(visitor, st, *args, **kwargs):
+def visit(_visitor, st, *args, **kwargs):
     st._keep = "maybe"
     return False
 
 
 @LayoutSubsetVisitor.register(ast.FeatureNameStatement)
-def visit(visitor, st, *args, **kwargs):
+def visit(_visitor, st, *args, **kwargs):
     st._keep = "maybe"
     return False
 
 
 @LayoutSubsetVisitor.register(ast.LanguageSystemStatement)
-def visit(visitor, st, *args, **kwargs):
+def visit(_visitor, st, *args, **kwargs):
     st._keep = False
     return False
 
 
 @LayoutSubsetVisitor.register(ast.ScriptStatement)
-def visit(visitor, st, *args, **kwargs):
+def visit(_visitor, st, *args, **kwargs):
     st._keep = "maybe"
     return False
 
 
 @LayoutSubsetVisitor.register(ast.LanguageStatement)
-def visit(visitor, st, *args, **kwargs):
+def visit(_visitor, st, *args, **kwargs):
     st._keep = "maybe"
     return False
 

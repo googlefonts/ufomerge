@@ -38,8 +38,14 @@ class UFOMerger:
     ufo2_languagesystems: list[Tuple[str, str]] = field(init=False)
 
     def __post_init__(self):
-        # Set up the glyphset
+        if self.glyphs is None:
+            self.glyphs = []
+        if self.exclude_glyphs is None:
+            self.exclude_glyphs = []
+        if self.codepoints is None:
+            self.codepoints = []
 
+        # Set up the glyphset
         if not self.glyphs and not self.codepoints:
             self.glyphs = self.ufo2.keys()
 
@@ -61,8 +67,9 @@ class UFOMerger:
                         if cp in existing_map:
                             if self.existing_handling == "skip":
                                 logger.info(
-                                    "Skipping codepoint U+%04X already present as '%s' in target file"
-                                    % (cp, existing_map[cp])
+                                    "Skipping codepoint U+%04X already present as '%s' in target file",
+                                    cp,
+                                    existing_map[cp],
                                 )
                                 # Blacklist this glyph (it may come back
                                 # because of layout/component closure.)
@@ -82,8 +89,9 @@ class UFOMerger:
                 )
                 codepoints_string = ", ".join("U+%04X" % cp for cp in codepoints)
                 logger.info(
-                    "Removing mappings %s from glyph '%s' due to incoming codepoints"
-                    % (codepoints_string, glyphname)
+                    "Removing mappings %s from glyph '%s' due to incoming codepoints",
+                    codepoints_string,
+                    glyphname,
                 )
                 # We *could* delete it from the target glyphset, but there
                 # is a problem here - what if it's actually mentioned in the
@@ -95,8 +103,8 @@ class UFOMerger:
         # Check those glyphs actually are in UFO 2
         not_there = set(self.incoming_glyphset) - set(self.ufo2.keys())
         if len(not_there):
-            logger.warn(
-                "The following glyphs were not in UFO 2: %s" % ", ".join(not_there)
+            logger.warning(
+                "The following glyphs were not in UFO 2: %s", ", ".join(not_there)
             )
             for glyph in not_there:
                 del self.incoming_glyphset[glyph]
@@ -172,9 +180,7 @@ class UFOMerger:
         # Now do the add, first deal with the default layer.
         for glyph in self.incoming_glyphset.keys():
             if self.existing_handling == "skip" and glyph in self.ufo1:
-                logger.info(
-                    "Skipping glyph '%s' already present in target file" % glyph
-                )
+                logger.info("Skipping glyph '%s' already present in target file", glyph)
                 continue
 
             self.merge_set("public.glyphOrder", glyph, create_if_not_in_ufo1=False)
@@ -205,7 +211,7 @@ class UFOMerger:
                     continue
                 if self.existing_handling == "skip" and glyph in ufo1_layer:
                     logger.info(
-                        "Skipping glyph '%s' already present in target file" % glyph
+                        "Skipping glyph '%s' already present in target file", glyph
                     )
                     continue
                 if glyph in ufo1_layer:
@@ -233,7 +239,10 @@ class UFOMerger:
             elif base_glyph in self.ufo1:
                 # Oh bother.
                 logger.warning(
-                    f"New glyph {glyph} used component {base_glyph} which already exists in font; not replacing it, as you have not specified --replace-existing"
+                    "New glyph %s used component %s which already exists in font;"
+                    " not replacing it, as you have not specified --replace-existing",
+                    glyph,
+                    base_glyph,
                 )
 
     def filter_glyphs_incoming(self, glyphs: Iterable[str]) -> list[str]:
@@ -375,9 +384,9 @@ class UFOMerger:
 def merge_ufos(
     ufo1: Font,
     ufo2: Font,
-    glyphs: Iterable[str] = [],
-    exclude_glyphs: Iterable[str] = [],
-    codepoints: Iterable[int] = [],
+    glyphs: Iterable[str] = None,
+    exclude_glyphs: Iterable[str] = None,
+    codepoints: Iterable[int] = None,
     layout_handling: str = "subset",
     existing_handling: str = "replace",
     include_dir: Path | None = None,
@@ -435,9 +444,9 @@ def merge_ufos(
 
 def subset_ufo(
     ufo: Font,
-    glyphs: Iterable[str] = [],
-    exclude_glyphs: Iterable[str] = [],
-    codepoints: Iterable[int] = [],
+    glyphs: Iterable[str] = None,
+    exclude_glyphs: Iterable[str] = None,
+    codepoints: Iterable[int] = None,
     layout_handling: str = "subset",
     include_dir: Path | None = None,
     original_glyphlist: Iterable[str] | None = None,
