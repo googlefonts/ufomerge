@@ -246,8 +246,12 @@ def visit(visitor, st, *args, **kwargs):
 
 @LayoutSubsetVisitor.register(ast.AlternateSubstStatement)
 def visit(visitor, st, *args, **kwargs):
-    st.glyph = visitor.filter_glyph_container(st.glyph)
-    st.replacement = visitor.filter_glyph_container(st.replacement)
+    st.glyph = filter_glyph_container(
+        st.glyph, visitor.glyphset, visitor.class_name_references
+    )
+    st.replacement = filter_glyph_container(
+        st.replacement, visitor.glyphset, visitor.class_name_references
+    )
     st.prefix = filter_sequence(
         st.prefix, visitor.glyphset, visitor.class_name_references
     )
@@ -265,7 +269,9 @@ def visit(visitor, st, *args, **kwargs):
 
 @LayoutSubsetVisitor.register(ast.CursivePosStatement)
 def visit(visitor, st, *args, **kwargs):
-    st.glyphclass = visitor.filter_glyph_container(st.glyphclass)
+    st.glyphclass = filter_glyph_container(
+        st.glyphclass, visitor.glyphset, visitor.class_name_references
+    )
     st._keep = bool(st.glyphclass.glyphSet())
     return False
 
