@@ -164,7 +164,7 @@ class UFOMerger:
         if self.layout_handling != "ignore":
             subsetter = LayoutSubsetter(glyphset=self.final_glyphset)
             subsetter.subset(self.ufo2_features)
-            self.ufo1.features.text += self.ufo2_features.asFea()
+            self.ufo1.features.text += "\n" + self.ufo2_features.asFea()
             self.add_language_systems(subsetter.incoming_language_systems)
 
         # list() avoids "Set changed size during iteration" error
