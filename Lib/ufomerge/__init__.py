@@ -6,12 +6,12 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping, OrderedDict, Set, Tuple
+from typing import Any, Iterable, Mapping, OrderedDict, Set, Tuple, Optional
 
 from fontTools.feaLib.parser import Parser
 import fontTools.feaLib.ast as ast
 from ufoLib2 import Font
-from ufoLib2.objects import LayerSet, Layer
+from ufoLib2.objects import LayerSet, Layer, Glyph, Anchor
 
 from ufomerge.layout import LayoutClosureVisitor, LayoutSubsetter
 
@@ -29,6 +29,8 @@ class UFOMerger:
     layout_handling: str = "subset"
     existing_handling: str = "replace"
     include_dir: Path | None = None
+    merge_dotted_circle_anchors: bool = True
+
     original_glyphlist: Iterable[str] | None = None
     # We would like to use a set here, but we need order preservation
     incoming_glyphset: dict[str, bool] = field(init=False)
@@ -36,6 +38,7 @@ class UFOMerger:
     blacklisted: Set[str] = field(init=False)
     ufo2_features: ast.FeatureFile = field(init=False)
     ufo2_languagesystems: list[Tuple[str, str]] = field(init=False)
+    dotted_circle_anchors: list[Anchor] = field(init=False)
 
     def __post_init__(self):
         if self.glyphs is None:
@@ -51,6 +54,8 @@ class UFOMerger:
 
         self.incoming_glyphset = dict.fromkeys(self.glyphs, True)
         self.blacklisted = set([])
+
+        self.dotted_circle_anchors = self.merged_dotted_circle_anchors()
 
         # Now add codepoints
         if self.codepoints:
@@ -219,6 +224,9 @@ class UFOMerger:
                 else:
                     ufo1_layer.addGlyph(ufo2_layer[glyph])
 
+        # Fixups
+        self.handle_dotted_circle()
+
     def close_components(self, glyph: str):
         """Add any needed components, recursively"""
         components = self.ufo2[glyph].components
@@ -352,6 +360,28 @@ class UFOMerger:
                         if glyph in self.final_glyphset
                     ]
 
+    def merged_dotted_circle_anchors(self):
+        if not self.merge_dotted_circle_anchors:
+            return []
+        # Find both glyphs
+        ds2 = self.find_dotted_circle(self.ufo2)
+        ds1 = self.find_dotted_circle(self.ufo1)
+        if ds1 is None or ds2 is None:
+            return []
+        anchors = ds1.anchors
+        names = [anchor.name for anchor in anchors]
+        for anchor in ds2.anchors:
+            if anchor.name not in names:
+                anchors.append(anchor)
+        return anchors
+
+    def handle_dotted_circle(self):
+        if self.dotted_circle_anchors:
+            ds1 = self.find_dotted_circle(self.ufo1)
+            if ds1 is None:
+                return
+            ds1.anchors = self.dotted_circle_anchors
+
     # Utility routines
 
     # Routines for merging font lib keys
@@ -380,6 +410,16 @@ class UFOMerger:
                 return
         lib1[name][glyph] = lib2[name][glyph]
 
+    def find_dotted_circle(self, ufo) -> Optional[Glyph]:
+        if "dottedCircle" in ufo:
+            return ufo["dottedCircle"]
+        if "uni25CC" in ufo:
+            return ufo["uni25CC"]
+        for glyph in ufo:
+            if 0x25CC in glyph.unicodes:
+                return glyph
+        return None
+
 
 def merge_ufos(
     ufo1: Font,
@@ -391,6 +431,7 @@ def merge_ufos(
     existing_handling: str = "replace",
     include_dir: Path | None = None,
     original_glyphlist: Iterable[str] | None = None,
+    merge_dotted_circle_anchors: bool = True,
 ) -> None:
     """Merge two UFO files together
 
@@ -439,6 +480,7 @@ def merge_ufos(
         existing_handling,
         include_dir=include_dir,
         original_glyphlist=original_glyphlist,
+        merge_dotted_circle_anchors=merge_dotted_circle_anchors,
     ).merge()
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 
 import ufoLib2
 
@@ -70,6 +70,15 @@ layout.add_argument(
     default=False,
     help="Don't try to parse the layout rules",
 )
+
+fixups = parser.add_argument_group("Specialist fixups")
+parser.add_argument(
+    "--dotted-circle",
+    action=BooleanOptionalAction,
+    default=True,
+    help="Merge anchors if both fonts contain a dotted circle glyph",
+)
+
 
 parser.add_argument("ufo1", help="UFO font file to merge into")
 parser.add_argument("ufo2", help="UFO font file to merge")
@@ -151,5 +160,6 @@ def main(args=None):
         codepoints=codepoints,
         layout_handling=layout_handling,
         existing_handling=existing_handling,
+        merge_dotted_circle_anchors=args.dotted_circle,
     )
     ufo1.save(args.output, overwrite=True)

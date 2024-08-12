@@ -1,5 +1,6 @@
 from ufomerge import merge_ufos
 from ufoLib2.objects.component import Component
+from ufoLib2.objects.anchor import Anchor
 
 
 def test_glyphset(helpers):
@@ -79,3 +80,24 @@ def test_kerning_groups(helpers):
         ("A", "public.kern2.bar"): 70,
         ("A", "A"): 80,
     }
+
+
+def test_dotted_circle(helpers):
+    """Test that anchors are merged if both fonts contain a dotted circle glyph."""
+    ufo1 = helpers.create_ufo(["A", "B", "dottedCircle"])
+    ufo1["dottedCircle"].appendAnchor(Anchor(0, 100, "top"))
+    ufo2 = helpers.create_ufo(["A", "B", "dottedCircle"])
+    ufo2["dottedCircle"].appendAnchor(Anchor(0, -100, "bottom"))
+
+    merge_ufos(ufo1, ufo2, merge_dotted_circle_anchors=False)
+    assert set(a.name for a in ufo1["dottedCircle"].anchors) == {
+        "bottom"
+    }  # We replaced.
+
+    ufo1 = helpers.create_ufo(["A", "B", "dottedCircle"])
+    ufo1["dottedCircle"].appendAnchor(Anchor(0, 100, "top"))
+    ufo2 = helpers.create_ufo(["A", "B", "dottedCircle"])
+    ufo2["dottedCircle"].appendAnchor(Anchor(0, -100, "bottom"))
+
+    merge_ufos(ufo1, ufo2, merge_dotted_circle_anchors=True)
+    assert set(a.name for a in ufo1["dottedCircle"].anchors) == {"top", "bottom"}
