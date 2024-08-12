@@ -239,3 +239,31 @@ def test_cull_unwanted_named_features(helpers) -> None:
     merge_ufos(ufo1, ufo2, ["b"])
 
     assert "ss01" not in ufo1.features.text
+
+
+def test_cull_unwanted_aalt(helpers) -> None:
+    ufo1 = helpers.create_ufo([])
+    ufo2 = helpers.create_ufo(["a", "a.alt", "b", "b.alt"])
+    ufo2.features.text = """
+        feature ss01 {
+            featureNames {
+                name "Single story a";
+            };
+            sub a by a.alt;
+        } ss01;
+
+        feature ss02 {
+            sub b by b.alt;
+        } ss02;
+
+        feature aalt {
+            feature ss01;
+            feature ss02;
+        } aalt;
+    """
+
+    merge_ufos(ufo1, ufo2, ["b", "b.alt"])
+
+    assert "aalt" in ufo1.features.text
+    assert "ss01" not in ufo1.features.text
+    assert "ss02" in ufo1.features.text
