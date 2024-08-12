@@ -27,6 +27,7 @@ jobs:
           pip install '.'
       - name: lint
         run: |
+            pip install black
             black . --check --diff --color
       - name: Run Tests
         run: |
