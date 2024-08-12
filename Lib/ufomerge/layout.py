@@ -86,6 +86,7 @@ class LayoutSubsetVisitor(Visitor):
         self.glyphset = glyphset
         self.class_name_references = defaultdict(list)
         self.dropped_lookups = set()
+        self.dropped_features = set()
         self.referenced_mark_classes = set()
 
 
@@ -363,12 +364,19 @@ def visit(visitor, block, *args, **kwargs):
         visitor.dropped_lookups.add(block.name)
     elif isinstance(block, ast.FeatureBlock) and not block._keep:
         logger.warning("Removing ineffective feature %s", block.name)
+        visitor.dropped_features.add(block.name)
     return False
 
 
 @LayoutSubsetVisitor.register(ast.LookupReferenceStatement)
 def visit(visitor, st, *args, **kwargs):
     st._keep = st.lookup.name not in visitor.dropped_lookups
+    return False
+
+
+@LayoutSubsetVisitor.register(ast.FeatureReferenceStatement)
+def visit(visitor, st, *args, **kwargs):
+    st._keep = st.featureName not in visitor.dropped_features
     return False
 
 
