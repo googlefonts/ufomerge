@@ -25,7 +25,7 @@ jobs:
       - name: Install packages
         run: |
           pip install '.'
-          pip install black pytest
+          pip install '.[dev]'
       - name: lint
         run: |
             black . --check --diff --color

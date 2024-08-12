@@ -19,6 +19,13 @@ dependencies = [
   'ufoLib2',
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "fontFeatures"
+]
+
 [project.scripts]
 ufomerge = "ufomerge.cli:main"
 
