@@ -39,6 +39,7 @@ class Helpers:
             t = re.sub(r"(?m)^\s*;?\s*$", "", t)
             t = re.sub(r"\n\n", "\n", t)
             return t
+
         assert transform(ufo.features.text) == transform(features)
 
 
