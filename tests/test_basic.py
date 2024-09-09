@@ -102,3 +102,26 @@ def test_dotted_circle(helpers):
 
     merge_ufos(ufo1, ufo2, merge_dotted_circle_anchors=True)
     assert set(a.name for a in ufo1["dottedCircle"].anchors) == {"top", "bottom"}
+
+
+def test_28(helpers):
+    ufo1 = helpers.create_ufo(["A", "B"])
+    b1 = ufo1["B"]
+    b1.height = 100
+    b1.unicodes = [0x42]
+
+    ufo2 = helpers.create_ufo(["B", "C"])
+    b2 = ufo2["B"]
+    b2.height = 200
+    b2.unicodes = [0x42]
+
+    merge_ufos(
+        ufo1,
+        ufo2,
+        exclude_glyphs=["B"],
+        codepoints=[0x42],
+    )
+
+    assert "B" in ufo1
+    assert ufo1["B"].height == 100
+    assert ufo1["B"].unicode == 0x42  # fails

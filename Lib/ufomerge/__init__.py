@@ -68,6 +68,9 @@ class UFOMerger:
             for glyph in self.ufo2:
                 for cp in glyph.unicodes:
                     if cp in self.codepoints:
+                        if glyph.name in self.exclude_glyphs:
+                            # Seriously?
+                            continue
                         # But see if we have a corresponding glyph already
                         if cp in existing_map:
                             if self.existing_handling == "skip":
@@ -103,7 +106,8 @@ class UFOMerger:
                 # feature file?! So we don't.
 
         for glyph in self.exclude_glyphs:
-            del self.incoming_glyphset[glyph]
+            if glyph in self.incoming_glyphset:
+                del self.incoming_glyphset[glyph]
 
         # Check those glyphs actually are in UFO 2
         not_there = set(self.incoming_glyphset) - set(self.ufo2.keys())
