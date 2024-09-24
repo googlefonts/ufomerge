@@ -372,7 +372,7 @@ class UFOMerger:
         ds1 = self.find_dotted_circle(self.ufo1)
         if ds1 is None or ds2 is None:
             return []
-        anchors = ds1.anchors
+        anchors = list(ds1.anchors)  # The accessor is weird
         names = [anchor.name for anchor in anchors]
         for anchor in ds2.anchors:
             if anchor.name not in names:
