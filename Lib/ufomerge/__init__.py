@@ -14,6 +14,7 @@ from ufoLib2 import Font
 from ufoLib2.objects import LayerSet, Layer, Glyph, Anchor
 
 from ufomerge.layout import LayoutClosureVisitor, LayoutSubsetter, LookupBlockGatherer
+from ufomerge.scaler import scale_ufo
 
 logger = logging.getLogger("ufomerge")
 logging.basicConfig(level=logging.INFO)
@@ -141,6 +142,11 @@ class UFOMerger:
         if not self.incoming_glyphset:
             logger.info("No glyphs selected, nothing to do")
             return
+
+        if self.ufo1.info.unitsPerEm != self.ufo2.info.unitsPerEm:
+            scale = self.ufo1.info.unitsPerEm / self.ufo2.info.unitsPerEm
+            logger.info("Scaling UFO2 by %f", scale)
+            scale_ufo(self.ufo2, scale)
 
         if self.layout_handling == "closure":
             # There is a hard sequencing problem here. Glyphs which
