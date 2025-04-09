@@ -17,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
       - name: Install release dependencies
         run: |
@@ -37,13 +37,13 @@ jobs:
 
       - name: Create GitHub release
         id: create_release
-        uses: actions/create-release@v1
+        uses: ncipollo/release-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          body_path: "${{ runner.temp }}/CHANGELOG.md"
+          tag: ${{ github.ref }}
+          name: ${{ github.ref }}
+          bodyFile: "${{ runner.temp }}/CHANGELOG.md"
           draft: false
           prerelease: false
 
@@ -58,7 +58,7 @@ jobs:
   publish-to-pypi:
     name: >-
       Publish Python 🐍 distribution 📦 to PyPI
-    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
+    if: startsWith(github.ref, 'refs/tags/') # only publish to PyPI on tag pushes
     needs:
       - build
     runs-on: ubuntu-latest
@@ -66,7 +66,7 @@ jobs:
       name: pypi
       url: https://pypi.org/p/ufomerge
     permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
+      id-token: write # IMPORTANT: mandatory for trusted publishing
     steps:
       - name: Download all the dists
         uses: actions/download-artifact@v4
