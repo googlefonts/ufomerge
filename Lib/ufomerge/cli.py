@@ -51,26 +51,31 @@ existing.add_argument(
 )
 
 layout = parser.add_argument_group("Layout closure handling")
-layout = layout.add_mutually_exclusive_group(required=False)
-layout.add_argument(
+layout2 = layout.add_mutually_exclusive_group(required=False)
+layout2.add_argument(
     "--subset-layout",
     action="store_true",
     default=True,
     help="Drop layout rules concerning glyphs not selected",
 )
-layout.add_argument(
+layout2.add_argument(
     "--layout-closure",
     action="store_true",
     default=False,
     help="Add glyphs from UFO 2 contained in layout rules, even if not in glyph set",
 )
-layout.add_argument(
+layout2.add_argument(
     "--ignore-layout",
     action="store_true",
     default=False,
     help="Don't try to parse the layout rules",
 )
-
+layout.add_argument(
+    "--duplicate-lookups",
+    choices=["first", "both"],
+    default="first",
+    help="How to handle duplicate lookups in the merged font",
+)
 fixups = parser.add_argument_group("Specialist fixups")
 parser.add_argument(
     "--dotted-circle",
@@ -103,7 +108,7 @@ def main(args=None):
         layout_handling = "closure"
     else:
         layout_handling = "subset"
-
+    
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
         logging.getLogger("ufomerge").setLevel(logging.DEBUG)
@@ -159,6 +164,7 @@ def main(args=None):
         exclude_glyphs=exclude_glyphs,
         codepoints=codepoints,
         layout_handling=layout_handling,
+        duplicate_lookup_handling=args.duplicate_lookups,
         existing_handling=existing_handling,
         merge_dotted_circle_anchors=args.dotted_circle,
     )

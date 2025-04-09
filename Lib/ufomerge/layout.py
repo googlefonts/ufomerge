@@ -64,6 +64,8 @@ def _deduplicate_class_defs(
 class LayoutSubsetter:
     glyphset: Set[str]
     incoming_language_systems: list[tuple[str, str]] = field(init=False)
+    dropped_lookups: list[str] = field(default=list)
+
 
     def subset(self, fea: ast.FeatureFile):
         self.incoming_language_systems = [
@@ -73,6 +75,7 @@ class LayoutSubsetter:
         ]
 
         visitor = LayoutSubsetVisitor(self.glyphset)
+        visitor.dropped_lookups = set(self.dropped_lookups)
         visitor.visit(fea)
         # At this point, all previous class definitions should have been
         # dropped from the AST, and we can insert new deduplicated ones.
@@ -359,9 +362,13 @@ def visit(visitor, block, *args, **kwargs):
             getattr(statement, "_keep", True) is True for statement in block.statements
         ),
     )
-    if isinstance(block, ast.LookupBlock) and not block._keep:
-        logger.warning("Removing ineffective lookup %s", block.name)
-        visitor.dropped_lookups.add(block.name)
+    if isinstance(block, ast.LookupBlock):
+        if block.name in visitor.dropped_lookups:
+            # We may have pre-seeded it there already with another font's lookups
+            block._keep = False
+        if not block._keep:
+            logger.warning("Removing ineffective lookup %s", block.name)
+            visitor.dropped_lookups.add(block.name)
     elif isinstance(block, ast.FeatureBlock) and not block._keep:
         logger.warning("Removing ineffective feature %s", block.name)
         visitor.dropped_features.add(block.name)
@@ -508,3 +515,12 @@ def visit(visitor, st, *args, **kwargs):
                 outglyph,
                 inglyph,
             )
+
+
+class LookupBlockGatherer(Visitor):
+    def __init__(self):
+        self.lookup_names = set()
+
+@LookupBlockGatherer.register(ast.LookupBlock)
+def visit(visitor, block, *args, **kwargs):
+    visitor.lookup_names.add(block.name)

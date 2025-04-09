@@ -13,7 +13,7 @@ import fontTools.feaLib.ast as ast
 from ufoLib2 import Font
 from ufoLib2.objects import LayerSet, Layer, Glyph, Anchor
 
-from ufomerge.layout import LayoutClosureVisitor, LayoutSubsetter
+from ufomerge.layout import LayoutClosureVisitor, LayoutSubsetter, LookupBlockGatherer
 
 logger = logging.getLogger("ufomerge")
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +28,7 @@ class UFOMerger:
     codepoints: Iterable[int] = field(default_factory=list)
     layout_handling: str = "subset"
     existing_handling: str = "replace"
+    duplicate_lookup_handling: str = "first"
     include_dir: Path | None = None
     merge_dotted_circle_anchors: bool = True
 
@@ -53,7 +54,7 @@ class UFOMerger:
             self.glyphs = self.ufo2.keys()
 
         self.incoming_glyphset = dict.fromkeys(self.glyphs, True)
-        self.blacklisted = set([])
+        self.blacklisted = set(self.exclude_glyphs)
 
         self.dotted_circle_anchors = self.merged_dotted_circle_anchors()
 
@@ -172,6 +173,23 @@ class UFOMerger:
 
         if self.layout_handling != "ignore":
             subsetter = LayoutSubsetter(glyphset=self.final_glyphset)
+            if self.duplicate_lookup_handling == "first":
+                ufo1path = getattr(self.ufo1, "_path", None)
+                includeDir = (
+                    self.include_dir
+                    if self.include_dir is not None
+                    else Path(ufo1path).parent if ufo1path else None
+                )
+                self.ufo1_features = Parser(
+                    StringIO(self.ufo1.features.text),
+                    includeDir=includeDir,
+                    glyphNames=self.original_glyphlist or list(self.ufo1.keys()),
+                ).parse()
+                # Preseed the subsetter with all our lookup name
+                visitor = LookupBlockGatherer()
+                visitor.visit(self.ufo1_features)
+                subsetter.dropped_lookups = visitor.lookup_names
+
             subsetter.subset(self.ufo2_features)
             self.ufo1.features.text += "\n" + self.ufo2_features.asFea()
             self.add_language_systems(subsetter.incoming_language_systems)
@@ -433,6 +451,7 @@ def merge_ufos(
     codepoints: Iterable[int] = None,
     layout_handling: str = "subset",
     existing_handling: str = "replace",
+    duplicate_lookup_handling: str = "first",
     include_dir: Path | None = None,
     original_glyphlist: Iterable[str] | None = None,
     merge_dotted_circle_anchors: bool = True,
@@ -461,6 +480,13 @@ def merge_ufos(
             then when layout_handling=="subset", this rule will be dropped;
             but if layout_handling=="closure", glyph C will also be merged
             so that the ligature still works. The default is "subset".
+        duplicate_lookup_handling: One of either "first", "second", or "both".
+            What to do if lookups in the donor font are already present in
+            the target font. "first" will take the lookup from the
+            target font. "second" will take the lookup from the donor
+            font (this is not currently implemented). "both" will add the
+            lookup regardless (this will probably not compile).
+            The default is "first".
         existing_handling: One of either "replace" or "skip". What to do
             if the donor glyph already exists in UFO1: "replace" replaces
             it with the version in UFO2; "skip" keeps the existing glyph.
@@ -485,6 +511,7 @@ def merge_ufos(
         include_dir=include_dir,
         original_glyphlist=original_glyphlist,
         merge_dotted_circle_anchors=merge_dotted_circle_anchors,
+        duplicate_lookup_handling=duplicate_lookup_handling,
     ).merge()
 
 
