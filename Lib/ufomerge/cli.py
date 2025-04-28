@@ -108,7 +108,7 @@ def main(args=None):
         layout_handling = "closure"
     else:
         layout_handling = "subset"
-    
+
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
         logging.getLogger("ufomerge").setLevel(logging.DEBUG)
