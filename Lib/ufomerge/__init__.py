@@ -6,7 +6,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping, OrderedDict, Set, Tuple, Optional
+from typing import Any, Iterable, Mapping, OrderedDict, Set, Tuple, Optional, Union
 
 from fontTools.feaLib.parser import Parser
 import fontTools.feaLib.ast as ast
@@ -28,7 +28,7 @@ class UFOMerger:
     exclude_glyphs: Iterable[str] = field(default_factory=list)
     codepoints: Iterable[int] = field(default_factory=list)
     layout_handling: str = "subset"
-    existing_handling: str = "replace"
+    existing_handling: Union[str, dict[str, str]] = "replace"
     duplicate_lookup_handling: str = "first"
     include_dir: Path | None = None
     merge_dotted_circle_anchors: bool = True
@@ -75,7 +75,7 @@ class UFOMerger:
                             continue
                         # But see if we have a corresponding glyph already
                         if cp in existing_map:
-                            if self.existing_handling == "skip":
+                            if self.policy(existing_map[cp]) == "skip":
                                 logger.info(
                                     "Skipping codepoint U+%04X already present as '%s' in target file",
                                     cp,
@@ -84,13 +84,14 @@ class UFOMerger:
                                 # Blacklist this glyph (it may come back
                                 # because of layout/component closure.)
                                 self.blacklisted.add(glyph.name)
-                            elif self.existing_handling == "replace":
+                            elif self.policy(existing_map[cp]) == "replace":
                                 to_delete[existing_map[cp]].append(cp)
                         if glyph.name is not None:
                             self.incoming_glyphset[glyph.name] = True
 
             for glyph in self.blacklisted:
-                del self.incoming_glyphset[glyph]
+                if glyph in self.incoming_glyphset:
+                    del self.incoming_glyphset[glyph]
 
             # Clear up any glyphs for UFO1 we don't want any more
             for glyphname, codepoints in to_delete.items():
@@ -137,6 +138,15 @@ class UFOMerger:
             ).parse()
         else:
             self.ufo2_features = ast.FeatureFile()
+
+    def policy(self, glyph: str) -> str:
+        """Return the policy for a given glyph"""
+        if isinstance(self.existing_handling, dict):
+            return self.existing_handling.get(
+                glyph, self.existing_handling.get("DEFAULT", "replace")
+            )
+
+        return self.existing_handling
 
     def merge(self):
         if not self.incoming_glyphset:
@@ -212,7 +222,7 @@ class UFOMerger:
 
         # Now do the add, first deal with the default layer.
         for glyph in self.incoming_glyphset.keys():
-            if self.existing_handling == "skip" and glyph in self.ufo1:
+            if self.policy(glyph) == "skip" and glyph in self.ufo1:
                 logger.info("Skipping glyph '%s' already present in target file", glyph)
                 continue
 
@@ -242,7 +252,7 @@ class UFOMerger:
             for glyph in self.incoming_glyphset.keys():
                 if glyph not in ufo2_layer:
                     continue
-                if self.existing_handling == "skip" and glyph in ufo1_layer:
+                if self.policy(glyph) == "skip" and glyph in ufo1_layer:
                     logger.info(
                         "Skipping glyph '%s' already present in target file", glyph
                     )
@@ -268,7 +278,7 @@ class UFOMerger:
                 logger.debug("Adding %s used as a component in %s", base_glyph, glyph)
                 self.incoming_glyphset[base_glyph] = True
                 self.close_components(base_glyph)
-            elif self.existing_handling == "replace":
+            elif self.policy(base_glyph) == "replace":
                 # Also not a problem
                 self.incoming_glyphset[base_glyph] = True
                 self.close_components(base_glyph)
@@ -496,7 +506,10 @@ def merge_ufos(
         existing_handling: One of either "replace" or "skip". What to do
             if the donor glyph already exists in UFO1: "replace" replaces
             it with the version in UFO2; "skip" keeps the existing glyph.
-            The default is "replace".
+            The default is "replace". Alternatively, a dictionary
+            mapping glyph names to "replace" or "skip" can be provided;
+            the name "DEFAULT" can be used to set the default for any glyphs
+            not in the dictionary.
         include_dir: The directory to look for include files in. If not
             present, probes the UFO2 object for directory information.
         original_glyphlist: The original glyph list for UFO2, for when you

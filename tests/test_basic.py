@@ -49,6 +49,25 @@ def test_existing_handling(helpers):
     assert ufo1["B"].width == 200
 
 
+def test_existing_handling_dict(helpers):
+    ufo1 = helpers.create_ufo(["A", "B", "C", "D"])
+    ufo1["B"].width = 100
+    ufo1["C"].width = 100
+    ufo1["D"].width = 100
+    ufo2 = helpers.create_ufo(["B", "C", "D"])
+    ufo2["B"].width = 200
+    ufo2["C"].width = 200
+    ufo2["D"].width = 200
+    merge_ufos(
+        ufo1,
+        ufo2,
+        existing_handling={"B": "skip", "C": "replace", "DEFAULT": "replace"},
+    )
+    assert ufo1["B"].width == 100
+    assert ufo1["C"].width == 200
+    assert ufo1["D"].width == 200
+
+
 def test_kerning_groups(helpers):
     """Test that groups and kerning pairs of ufo1 are dropped if they reference
     any imported glyphs.
