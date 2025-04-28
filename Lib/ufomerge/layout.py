@@ -66,7 +66,6 @@ class LayoutSubsetter:
     incoming_language_systems: list[tuple[str, str]] = field(init=False)
     dropped_lookups: list[str] = field(default=list)
 
-
     def subset(self, fea: ast.FeatureFile):
         self.incoming_language_systems = [
             (st.script, st.language)
@@ -419,6 +418,12 @@ def visit(_visitor, st, *args, **kwargs):
     return False
 
 
+@LayoutSubsetVisitor.register(ast.NestedBlock)
+def visit(_visitor, st, *args, **kwargs):
+    st._keep = "maybe"
+    return False
+
+
 @LayoutSubsetVisitor.register(ast.LanguageSystemStatement)
 def visit(_visitor, st, *args, **kwargs):
     st._keep = False
@@ -520,6 +525,7 @@ def visit(visitor, st, *args, **kwargs):
 class LookupBlockGatherer(Visitor):
     def __init__(self):
         self.lookup_names = set()
+
 
 @LookupBlockGatherer.register(ast.LookupBlock)
 def visit(visitor, block, *args, **kwargs):
