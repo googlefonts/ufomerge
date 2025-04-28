@@ -29,6 +29,7 @@ class UFOMerger:
     codepoints: Iterable[int] = field(default_factory=list)
     layout_handling: str = "subset"
     existing_handling: Union[str, dict[str, str]] = "replace"
+    kern_handling: str = "conservative"
     duplicate_lookup_handling: str = "first"
     include_dir: Path | None = None
     merge_dotted_circle_anchors: bool = True
@@ -338,8 +339,9 @@ class UFOMerger:
         groups1 = self.ufo1.groups
         groups2 = self.ufo2.groups
         # Slim down the groups to only those in the glyph set
-        for glyph in groups2.keys():
-            groups2[glyph] = self.filter_glyphs_incoming(groups2[glyph])
+        if self.kern_handling == "conservative":
+            for glyph in groups2.keys():
+                groups2[glyph] = self.filter_glyphs_incoming(groups2[glyph])
 
         # Clean glyphs to be imported from the target UFO kerning groups, so
         # importing the source kerning then does not lead to duplicate group
@@ -373,6 +375,12 @@ class UFOMerger:
                 for glyph in groups2.get(second, [second])
                 if glyph in self.final_glyphset
             ]
+
+            if not any(
+                glyph in self.incoming_glyphset for glyph in left_glyphs + right_glyphs
+            ):
+                # No glyphs in the incoming set, so skip
+                continue
 
             if not left_glyphs or not right_glyphs:
                 continue
@@ -468,6 +476,7 @@ def merge_ufos(
     layout_handling: str = "subset",
     existing_handling: str = "replace",
     duplicate_lookup_handling: str = "first",
+    kern_handling: str = "conservative",
     include_dir: Path | None = None,
     original_glyphlist: Iterable[str] | None = None,
     merge_dotted_circle_anchors: bool = True,
@@ -510,6 +519,12 @@ def merge_ufos(
             mapping glyph names to "replace" or "skip" can be provided;
             the name "DEFAULT" can be used to set the default for any glyphs
             not in the dictionary.
+        kern_handling: One of either "conservative" or "aggressive". How
+            to handle kerning groups. "conservative" will remove any
+            glyphs which are not being imported from the donor's kerning
+            groups before merging. "aggressive" will merge the groups
+            regardless of whether the glyphs are being imported or not.
+            The default is "conservative".
         include_dir: The directory to look for include files in. If not
             present, probes the UFO2 object for directory information.
         original_glyphlist: The original glyph list for UFO2, for when you
@@ -527,6 +542,7 @@ def merge_ufos(
         codepoints,
         layout_handling,
         existing_handling,
+        kern_handling=kern_handling,
         include_dir=include_dir,
         original_glyphlist=original_glyphlist,
         merge_dotted_circle_anchors=merge_dotted_circle_anchors,
