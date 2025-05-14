@@ -7,6 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, OrderedDict, Set, Tuple, Optional, Union
+import re
 
 from fontTools.feaLib.parser import Parser
 import fontTools.feaLib.ast as ast
@@ -206,8 +207,9 @@ class UFOMerger:
                 visitor = LookupBlockGatherer()
                 visitor.visit(self.ufo1_features)
                 subsetter.dropped_lookups = visitor.lookup_names
-
-            subsetter.subset(self.ufo2_features)
+            subsetter.subset(
+                self.ufo2_features, hidden_classes=self.discover_hidden_classes()
+            )
             self.ufo1.features.text += "\n" + self.ufo2_features.asFea()
             self.add_language_systems(subsetter.incoming_language_systems)
 
@@ -334,6 +336,24 @@ class UFOMerger:
             ast.LanguageSystemStatement(*pair) for pair in new_lss
         ]
         self.ufo1.features.text = featurefile.asFea()
+
+    def discover_hidden_classes(self) -> set:
+        # Dear God, you know what the worst thing about font engineering is?
+        # Everything is hacks, everything is a special case. There are corner
+        # cases on top of corner cases. We examine the feature code to see what
+        # glyph class definitions are used, and we drop those which are unused.
+        # Fine.
+        #
+        # But then there are glyph class definitions which are actually used -
+        # but not in the feature code. Contextual anchors stash some feature
+        # code snippets inside the glyphs themselves, and we have to make sure
+        # that any glyph classes used in those snippets are also included.
+        classes = set()
+        for glyph in self.ufo2:
+            for anchor in glyph.anchors:
+                if lib := glyph.objectLib(anchor).get("GPOS_Context"):
+                    classes |= set(re.findall(r"@([a-zA-Z0-9_]+)", lib))
+        return classes
 
     def merge_kerning(self):
         groups1 = self.ufo1.groups

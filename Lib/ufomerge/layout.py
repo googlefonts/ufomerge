@@ -66,14 +66,14 @@ class LayoutSubsetter:
     incoming_language_systems: list[tuple[str, str]] = field(init=False)
     dropped_lookups: list[str] = field(default=list)
 
-    def subset(self, fea: ast.FeatureFile):
+    def subset(self, fea: ast.FeatureFile, hidden_classes: list[str] = []):
         self.incoming_language_systems = [
             (st.script, st.language)
             for st in fea.statements
             if isinstance(st, ast.LanguageSystemStatement)
         ]
 
-        visitor = LayoutSubsetVisitor(self.glyphset)
+        visitor = LayoutSubsetVisitor(self.glyphset, hidden_classes)
         visitor.dropped_lookups = set(self.dropped_lookups)
         visitor.visit(fea)
         # At this point, all previous class definitions should have been
@@ -84,12 +84,13 @@ class LayoutSubsetter:
 
 
 class LayoutSubsetVisitor(Visitor):
-    def __init__(self, glyphset):
+    def __init__(self, glyphset, hidden_classes=None):
         self.glyphset = glyphset
         self.class_name_references = defaultdict(list)
         self.dropped_lookups = set()
         self.dropped_features = set()
         self.referenced_mark_classes = set()
+        self.hidden_classes = set(hidden_classes or [])
 
 
 @LayoutSubsetVisitor.register(ast.MarkClassDefinition)
@@ -129,7 +130,7 @@ def visit(visitor, st, *args, **kwargs):
 
 @LayoutSubsetVisitor.register(ast.GlyphClassDefinition)
 def visit(visitor, st, *args, **kwargs):
-    st._keep = False
+    st._keep = st.name in visitor.hidden_classes
     return False
 
 
