@@ -20,6 +20,8 @@ from ufomerge.scaler import scale_ufo
 logger = logging.getLogger("ufomerge")
 logging.basicConfig(level=logging.INFO)
 
+OBJECT_LIBS_KEY = "public.objectLibs"
+
 
 @dataclass
 class UFOMerger:
@@ -351,6 +353,8 @@ class UFOMerger:
         classes = set()
         for glyph in self.ufo2:
             for anchor in glyph.anchors:
+                if OBJECT_LIBS_KEY not in glyph.lib:
+                    continue
                 if lib := glyph.objectLib(anchor).get("GPOS_Context"):
                     classes |= set(re.findall(r"@([a-zA-Z0-9_]+)", lib))
         return classes
