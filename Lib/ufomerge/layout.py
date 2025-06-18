@@ -531,3 +531,9 @@ class LookupBlockGatherer(Visitor):
 @LookupBlockGatherer.register(ast.LookupBlock)
 def visit(visitor, block, *args, **kwargs):
     visitor.lookup_names.add(block.name)
+
+
+@LookupBlockGatherer.register(ast.MarkClassDefinition)
+def visit(visitor, mcd, *args, **kwargs):
+    # Avoid recursion
+    return False
