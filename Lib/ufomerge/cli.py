@@ -88,6 +88,7 @@ parser.add_argument(
 parser.add_argument("ufo1", help="UFO font file to merge into")
 parser.add_argument("ufo2", help="UFO font file to merge")
 parser.add_argument("--output", "-o", help="Output UFO font file")
+parser.add_argument("--fea-include-dir", help="Include directory for feature files")
 parser.add_argument(
     "--verbose",
     "-v",
@@ -167,5 +168,6 @@ def main(args=None):
         duplicate_lookup_handling=args.duplicate_lookups,
         existing_handling=existing_handling,
         merge_dotted_circle_anchors=args.dotted_circle,
+        include_dir=args.fea_include_dir,
     )
     ufo1.save(args.output, overwrite=True)

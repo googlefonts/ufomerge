@@ -226,7 +226,14 @@ class UFOMerger:
         self.merge_kerning()
 
         # Now do the add, first deal with the default layer.
-        for glyph in self.incoming_glyphset.keys():
+        # If ufo2 has a glyph order, we enumerate the glyphs in that order.
+        incoming_glyphset = list(self.incoming_glyphset.keys())
+        if "public.glyphOrder" in self.ufo2.lib:
+            order = self.ufo2.lib["public.glyphOrder"]
+            incoming_glyphset = sorted(
+                incoming_glyphset, key=lambda x: order.index(x) if x in order else -1
+            )
+        for glyph in incoming_glyphset:
             if self.policy(glyph) == "skip" and glyph in self.ufo1:
                 logger.info("Skipping glyph '%s' already present in target file", glyph)
                 continue
@@ -303,7 +310,9 @@ class UFOMerger:
         if not incoming_languagesystems:
             return
         featurefile = Parser(
-            StringIO(self.ufo1.features.text), glyphNames=list(self.final_glyphset)
+            StringIO(self.ufo1.features.text),
+            glyphNames=list(self.final_glyphset),
+            includeDir=self.include_dir if self.include_dir else None,
         ).parse()
 
         new_lss = []

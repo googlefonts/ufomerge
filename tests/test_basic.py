@@ -144,3 +144,24 @@ def test_28(helpers):
     assert "B" in ufo1
     assert ufo1["B"].height == 100
     assert ufo1["B"].unicode == 0x42  # fails
+
+
+def test_glyphorder(helpers):
+    ufo1 = helpers.create_ufo(["A", "B", "C"])
+    ufo1.lib["public.glyphOrder"] = ["A", "B", "C"]
+    ufo2 = helpers.create_ufo(["D", "E"])
+    ufo2.lib["public.glyphOrder"] = ["D", "E"]
+
+    merge_ufos(ufo1, ufo2)
+
+    assert ufo1.lib.get("public.glyphOrder") == ["A", "B", "C", "D", "E"]
+
+    # But what if the glyphOrder is not the ORDER OF THE GLYPHS?!
+    ufo3 = helpers.create_ufo(["A", "B", "C"])
+    ufo3.lib["public.glyphOrder"] = ["A", "B", "C"]
+    ufo4 = helpers.create_ufo(["C", "D", "E"])
+    ufo4.lib["public.glyphOrder"] = ["C", "E", "D"]
+
+    merge_ufos(ufo3, ufo4, existing_handling="replace")
+
+    assert ufo3.lib.get("public.glyphOrder") == ["A", "B", "C", "E", "D"]
