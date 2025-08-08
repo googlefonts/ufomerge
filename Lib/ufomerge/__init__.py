@@ -381,6 +381,11 @@ class UFOMerger:
         # membership if their memebership changed.
         kerning_groups_to_be_cleaned = []
         for group_name in list(groups1.keys()):
+            # If it's literally the same group, go for it
+            if group_name in groups2 and set(groups1[group_name]) == set(
+                groups2[group_name]
+            ):
+                continue
             members = groups1[group_name]
             new_members = [
                 member for member in members if member not in self.incoming_glyphset
