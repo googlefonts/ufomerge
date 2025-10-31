@@ -309,10 +309,16 @@ class UFOMerger:
     def add_language_systems(self, incoming_languagesystems):
         if not incoming_languagesystems:
             return
+        ufo1path = getattr(self.ufo1, "_path", None)
+        includeDir = (
+            self.include_dir
+            if self.include_dir is not None
+            else Path(ufo1path).parent if ufo1path else None
+        )
         featurefile = Parser(
             StringIO(self.ufo1.features.text),
+            includeDir=includeDir,
             glyphNames=list(self.final_glyphset),
-            includeDir=self.include_dir if self.include_dir else None,
         ).parse()
 
         new_lss = []
