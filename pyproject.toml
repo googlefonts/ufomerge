@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ufomerge"
 description = "Merge together two source fonts in UFO format"
+requires-python = ">3.10"
 readme = "README.md"
 dynamic = ["version"]
 authors = [
@@ -19,7 +20,7 @@ dependencies = [
   'ufoLib2',
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest",
     "black",
