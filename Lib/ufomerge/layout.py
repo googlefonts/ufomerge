@@ -1,4 +1,5 @@
 import logging
+import re
 from collections import defaultdict
 from collections.abc import Set
 from dataclasses import dataclass, field
@@ -410,9 +411,18 @@ def visit(visitor, st, *args, **kwargs):
     return False
 
 
+# This particular comment is used by ufo2ft feature writers to know where to
+# place automatically generated code. See
+# https://github.com/googlefonts/ufo2ft/blob/9b9ced5854376ad23511099d1d5e9faef73fd276/Lib/ufo2ft/featureWriters/baseFeatureWriter.py#L18
+INSERT_FEATURE_MARKER = re.compile(r"\s*# Automatic Code.*")
+
+
 @LayoutSubsetVisitor.register(ast.Comment)
 def visit(_visitor, st, *args, **kwargs):
-    st._keep = "maybe"
+    if INSERT_FEATURE_MARKER.match(st.text) is not None:
+        st._keep = True
+    else:
+        st._keep = "maybe"
     return False
 
 

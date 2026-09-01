@@ -281,3 +281,16 @@ def test_both_ss_names(helpers) -> None:
     assert "ss02" in ufo1.features.text
     assert "Single story a" in ufo1.features.text
     assert "Single story g" in ufo1.features.text
+
+
+def test_keep_automatic_code_comment(helpers) -> None:
+    ufo1 = helpers.create_ufo(["a"])
+    ufo2 = helpers.create_ufo(["b"])
+    ufo2.features.text = """
+        feature mark {
+            # Automatic Code
+        } mark;
+    """
+    merge_ufos(ufo1, ufo2)
+
+    assert "# Automatic Code" in ufo1.features.text
