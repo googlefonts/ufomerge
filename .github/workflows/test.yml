@@ -25,7 +25,7 @@ jobs:
       - name: Install packages
         run: |
           pip install '.'
-          pip install '.[dev]'
+          pip install --group dev
       - name: lint
         run: |
             black . --check --diff --color
