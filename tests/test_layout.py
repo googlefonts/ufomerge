@@ -56,13 +56,11 @@ feature kern {
 
 
 def test_chain(helpers):
-    ufo2 = helpers.create_ufo_from_features(
-        """
+    ufo2 = helpers.create_ufo_from_features("""
         lookup chained { pos A 120; pos B 200; } chained;
         lookup chain { pos [A B]' lookup chained [A B C]; } chain;
         feature kern { lookup chain; } kern;
-        """
-    )
+        """)
 
     ufo1 = subset_ufo(ufo2, glyphs=["A", "C"])
     helpers.assert_features_similar(
@@ -82,14 +80,11 @@ feature kern {
 
 
 def test_languagesystems(helpers):
-    ufo1 = helpers.create_ufo_from_features(
-        """
+    ufo1 = helpers.create_ufo_from_features("""
       languagesystem latn dflt;
       feature ccmp { sub A by B; } ccmp;
-    """
-    )
-    ufo2 = helpers.create_ufo_from_features(
-        """
+    """)
+    ufo2 = helpers.create_ufo_from_features("""
       languagesystem DFLT dflt;
       languagesystem dev2 dflt;
       languagesystem dev2 NEP;
@@ -100,8 +95,7 @@ def test_languagesystems(helpers):
         sub ta-deva by kssa-deva;
         sub la-deva by kssa-deva;
       } ccmp;
-    """
-    )
+    """)
     merge_ufos(ufo1, ufo2, glyphs=["ka-deva", "sa-deva", "kssa-deva", "ta-deva"])
     helpers.assert_features_similar(
         ufo1,
@@ -125,8 +119,7 @@ def test_languagesystems(helpers):
 
 
 def test_drop_contextual_empty_class(helpers):
-    ufo2 = helpers.create_ufo_from_features(
-        """
+    ufo2 = helpers.create_ufo_from_features("""
         @DAGESH = [dagesh-hb];
         @OFFENDING_PUNCTUATION = [period];
 
@@ -138,8 +131,7 @@ def test_drop_contextual_empty_class(helpers):
         feature kern {
             lookup hebrew_mark_resolve_clashing_punctuation;
         } kern;
-        """
-    )
+        """)
     ufo1 = subset_ufo(ufo2, glyphs=["period"])
 
     helpers.assert_features_similar(
@@ -151,8 +143,7 @@ def test_drop_contextual_empty_class(helpers):
 
 
 def test_drop_mark_class(helpers):
-    ufo2 = helpers.create_ufo_from_features(
-        """
+    ufo2 = helpers.create_ufo_from_features("""
         @something = [ a c ];
 
         markClass @something <anchor 100 200> @MC_above;
@@ -163,8 +154,7 @@ def test_drop_mark_class(helpers):
                 pos base @bGC_A_above <anchor 150 200> mark @MC_above;
             } MARK_BASE_above;
         } mark;
-        """
-    )
+        """)
     ufo1 = subset_ufo(ufo2, glyphs=["A"])
 
     helpers.assert_features_similar(
@@ -175,8 +165,7 @@ def test_drop_mark_class(helpers):
 
 
 def test_deduplicate_classes(helpers):
-    ufo2 = helpers.create_ufo_from_features(
-        """
+    ufo2 = helpers.create_ufo_from_features("""
         @SOMETHING = [a b c];
         @SOMETHING_ALT = [a.alt b.alt c.alt];
 
@@ -195,8 +184,7 @@ def test_deduplicate_classes(helpers):
                 sub @FOO a' @SOMETHING by b.alt;
             } bla;
         } rlig;
-        """
-    )
+        """)
     ufo1 = subset_ufo(ufo2, glyphs=["a", "a.alt", "b.alt", "c", "c.alt"])
 
     helpers.assert_features_similar(
