@@ -20,7 +20,7 @@ dependencies = [
   'ufoLib2',
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest",
     "black",
